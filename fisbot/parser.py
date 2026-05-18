@@ -7,6 +7,7 @@ from pydantic import BaseModel, field_validator, model_validator
 logger = logging.getLogger(__name__)
 
 DEFAULT_STOK_KODU = "GY3.31.318"
+DEFAULT_URUN_ADI = "Ürün adı okunamadı"
 
 STOK_KODLARI = {
     "GY3.30.303": "Gıda/İçecek",
@@ -55,6 +56,16 @@ class ReceiptItem(BaseModel):
             if stok is None or (isinstance(stok, str) and not stok.strip()):
                 data = {**data, "stok_secim_gerekli": True}
         return data
+
+    @field_validator("ad", mode="before")
+    @classmethod
+    def parse_ad(cls, v: object) -> str:
+        if v is None:
+            return DEFAULT_URUN_ADI
+        if isinstance(v, str):
+            ad = v.strip()
+            return ad or DEFAULT_URUN_ADI
+        return str(v)
 
     @field_validator("stok", mode="before")
     @classmethod
