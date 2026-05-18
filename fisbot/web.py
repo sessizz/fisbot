@@ -707,6 +707,15 @@ async def manual_entry() -> str:
         && Math.abs(targetVat - totals.vat) < 0.05;
     }
 
+    function resetManualForm() {
+      Object.values(fields).forEach((field) => {
+        field.value = "";
+      });
+      state.rows = [];
+      addRow();
+      fields.receiptDate.focus();
+    }
+
     rowsEl.addEventListener("input", (event) => {
       const rowEl = event.target.closest("tr[data-row-id]");
       const row = state.rows.find((item) => item.id === rowEl.dataset.rowId);
@@ -775,8 +784,7 @@ async def manual_entry() -> str:
       const detail = await response.json();
       resultBox.className = "rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 shadow-sm";
       resultBox.innerHTML = `Kaydedildi ve Sheets'e gonderildi. <a class="font-semibold underline" href="/#${detail.receipt.id}">Panelde ac</a>`;
-      state.rows = [];
-      render();
+      resetManualForm();
     });
 
     async function boot() {
