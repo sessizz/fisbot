@@ -50,7 +50,7 @@ async def dashboard() -> str:
       </div>
     </header>
 
-    <section class="grid gap-4 py-5 lg:grid-cols-[360px_1fr]">
+    <section class="grid gap-4 py-5 lg:grid-cols-[320px_minmax(0,1fr)]">
       <aside class="space-y-4">
         <div class="rounded-lg border border-line bg-white p-4 shadow-sm">
           <div class="flex items-center justify-between">
@@ -86,16 +86,16 @@ async def dashboard() -> str:
           />
         </div>
         <div class="overflow-x-auto">
-          <table class="w-full min-w-[900px] text-left text-sm">
+          <table class="w-full table-fixed text-left text-sm">
             <thead class="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
               <tr>
-                <th class="px-4 py-3 font-semibold">Tarih</th>
-                <th class="px-4 py-3 font-semibold">Fis no</th>
-                <th class="px-4 py-3 font-semibold">Stok kodu</th>
-                <th class="px-4 py-3 font-semibold">Stok adi</th>
-                <th class="px-4 py-3 font-semibold">KDV orani</th>
-                <th class="px-4 py-3 text-right font-semibold">KDV</th>
-                <th class="px-4 py-3 text-right font-semibold">Toplam tutar</th>
+                <th class="w-[112px] px-3 py-3 font-semibold">Tarih</th>
+                <th class="w-[76px] px-3 py-3 font-semibold">Fis no</th>
+                <th class="w-[126px] px-3 py-3 font-semibold">Stok kodu</th>
+                <th class="px-3 py-3 font-semibold">Stok adi</th>
+                <th class="w-[86px] px-3 py-3 font-semibold">KDV</th>
+                <th class="w-[94px] px-3 py-3 text-right font-semibold">KDV tutar</th>
+                <th class="w-[112px] px-3 py-3 text-right font-semibold">Toplam</th>
               </tr>
             </thead>
             <tbody id="rows" class="divide-y divide-line"></tbody>
@@ -156,16 +156,16 @@ async def dashboard() -> str:
 
       rowsEl.innerHTML = filtered.map((row) => `
         <tr class="hover:bg-mint/30">
-          <td class="whitespace-nowrap px-4 py-3">${esc(row.receipt_date || "-")}</td>
-          <td class="whitespace-nowrap px-4 py-3">${esc(row.receipt_no || "-")}</td>
-          <td class="whitespace-nowrap px-4 py-3 font-mono text-xs">${esc(row.stock_code)}</td>
-          <td class="px-4 py-3">
-            <div class="font-medium">${esc(row.stock_name)}</div>
-            <div class="mt-0.5 max-w-md truncate text-xs text-zinc-500">${esc(row.item_name)}</div>
+          <td class="truncate px-3 py-3">${esc(row.receipt_date || "-")}</td>
+          <td class="truncate px-3 py-3">${esc(row.receipt_no || "-")}</td>
+          <td class="truncate px-3 py-3 font-mono text-xs">${esc(row.stock_code)}</td>
+          <td class="min-w-0 px-3 py-3">
+            <div class="truncate font-medium">${esc(row.stock_name)}</div>
+            <div class="mt-0.5 truncate text-xs text-zinc-500">${esc(row.item_name)}</div>
           </td>
-          <td class="whitespace-nowrap px-4 py-3">%${esc(row.vat_rate ?? "-")}</td>
-          <td class="whitespace-nowrap px-4 py-3 text-right">${money.format(Number(row.vat_amount || 0))}</td>
-          <td class="whitespace-nowrap px-4 py-3 text-right font-semibold">${money.format(Number(row.total_amount || 0))}</td>
+          <td class="truncate px-3 py-3">%${esc(row.vat_rate ?? "-")}</td>
+          <td class="truncate px-3 py-3 text-right">${money.format(Number(row.vat_amount || 0))}</td>
+          <td class="truncate px-3 py-3 text-right font-semibold">${money.format(Number(row.total_amount || 0))}</td>
         </tr>
       `).join("");
 
