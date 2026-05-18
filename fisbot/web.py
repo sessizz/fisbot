@@ -745,6 +745,17 @@ async def manual_entry() -> str:
     });
     const saveButton = document.getElementById("saveReceipt");
     document.getElementById("addRow").addEventListener("click", () => addRow());
+    const receiptFieldOrder = [fields.receiptDate, fields.receiptNo, fields.targetVat, fields.targetTotal];
+    receiptFieldOrder.slice(0, -1).forEach((field, index) => {
+      field.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        if (field === fields.receiptDate) {
+          fields.receiptDate.value = formatDateInput(fields.receiptDate.value);
+        }
+        receiptFieldOrder[index + 1].focus();
+      });
+    });
     function createSummaryRow() {
       fields.receiptDate.value = formatDateInput(fields.receiptDate.value);
       const total = numberValue(fields.targetTotal.value);
