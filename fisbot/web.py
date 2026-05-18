@@ -511,7 +511,13 @@ async def manual_entry() -> str:
         <section class="rounded-lg border border-line bg-white p-4 shadow-sm">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 class="text-base font-semibold">Fis bilgileri</h2>
-            <button id="createSummaryRow" class="rounded-md border border-line px-3 py-2 text-sm font-semibold hover:bg-zinc-50" type="button">Satir olustur</button>
+            <div class="flex flex-wrap items-center gap-3">
+              <label class="flex h-10 items-center gap-2 rounded-md border border-line px-3 text-sm font-semibold">
+                <input id="fuelMode" class="h-4 w-4 accent-leaf" type="checkbox" />
+                Benzin
+              </label>
+              <button id="createSummaryRow" class="rounded-md border border-line px-3 py-2 text-sm font-semibold hover:bg-zinc-50" type="button">Satir olustur</button>
+            </div>
           </div>
           <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label class="block">
@@ -573,8 +579,10 @@ async def manual_entry() -> str:
 
   <script>
     const state = { stockOptions: [], rows: [], saving: false };
+    const vatRates = [0, 1, 10, 20];
     const money = new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const rowsEl = document.getElementById("manualRows");
+    const fuelMode = document.getElementById("fuelMode");
     const fields = {
       receiptDate: document.getElementById("receiptDate"),
       receiptNo: document.getElementById("receiptNo"),
@@ -596,6 +604,14 @@ async def manual_entry() -> str:
 
     function fmt(value) {
       return money.format(Number(value || 0));
+    }
+
+    function roundMoney(value) {
+      return Math.round(Number(value || 0) * 100) / 100;
+    }
+
+    function amountInputValue(value) {
+      return fmt(roundMoney(value));
     }
 
     function formatDateInput(value) {
@@ -658,7 +674,7 @@ async def manual_entry() -> str:
             <td class="px-3 py-3"><select name="stock_code" class="h-10 w-full min-w-0 rounded-md border border-line px-2 text-sm">${stockOptions(row.stock_code)}</select></td>
             <td class="px-3 py-3">
               <select name="vat_rate" class="h-10 w-full rounded-md border border-line px-2 text-sm">
-                ${[1,10,20].map((rate) => `<option value="${rate}" ${Number(row.vat_rate) === rate ? "selected" : ""}>%${rate}</option>`).join("")}
+                ${vatRates.map((rate) => `<option value="${rate}" ${Number(row.vat_rate) === rate ? "selected" : ""}>%${rate}</option>`).join("")}
               </select>
             </td>
             <td class="px-3 py-3 text-right"><input name="total_amount" value="${esc(row.total_amount)}" class="h-10 w-full rounded-md border border-line px-2 text-right text-sm" inputmode="decimal" /></td>
@@ -765,6 +781,27 @@ async def manual_entry() -> str:
         return;
       }
       state.rows = [];
+      if (fuelMode.checked) {
+        const firstTotal = roundMoney(total * 0.70);
+        const secondTotal = roundMoney((total - firstTotal) / 1.20);
+        const thirdTotal = roundMoney(total - firstTotal - secondTotal);
+        addRow({
+          stock_code: "GY3.32.322",
+          vat_rate: 20,
+          total_amount: amountInputValue(firstTotal)
+        });
+        addRow({
+          stock_code: "67899009",
+          vat_rate: 0,
+          total_amount: amountInputValue(secondTotal)
+        });
+        addRow({
+          stock_code: "6899008",
+          vat_rate: 0,
+          total_amount: amountInputValue(thirdTotal)
+        }, {focusStock: true});
+        return;
+      }
       addRow({
         vat_rate: guessVatRate(total, vat),
         total_amount: fields.targetTotal.value
@@ -868,7 +905,7 @@ async def api_create_manual_receipt(payload: ManualReceiptCreate) -> dict[str, A
     for item in payload.items:
         if item.stock_code not in stock_codes:
             raise HTTPException(status_code=400, detail="Unknown stock code")
-        if item.vat_rate not in {1, 10, 20}:
+        if item.vat_rate not in {0, 1, 10, 20}:
             raise HTTPException(status_code=400, detail="Invalid VAT rate")
         if item.total_amount <= 0:
             raise HTTPException(status_code=400, detail="Item total must be positive")

@@ -16,6 +16,8 @@ STOK_KODLARI = {
     "GY3.39.300": "Kırtasiye",
     "GY1.15.150": "İlaç/Tedavi",
     "GY3.32.322": "Araç/Yakıt",
+    "67899009": "Benzin KDV harici",
+    "6899008": "Benzin kalan",
     "GY1.13.138": "Giyim",
     "GY4.49.501": "KKEG",
 }

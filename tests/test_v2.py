@@ -251,6 +251,8 @@ class WebV2Tests(unittest.TestCase):
             self.assertIn("saveManualReceipt", manual_html)
             self.assertIn("event.altKey", manual_html)
             self.assertIn("receiptFieldOrder", manual_html)
+            self.assertIn("fuelMode", manual_html)
+            self.assertIn("67899009", manual_html)
             response = client.post(
                 "/api/manual-receipts",
                 json={
@@ -269,6 +271,41 @@ class WebV2Tests(unittest.TestCase):
             )
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.json()["receipt"]["status"], "synced")
+
+            fuel_response = client.post(
+                "/api/manual-receipts",
+                json={
+                    "receipt_date": "04.05.2026",
+                    "receipt_no": "BENZIN-1",
+                    "total_vat": 233.33,
+                    "grand_total": 2000.0,
+                    "items": [
+                        {
+                            "stock_code": "GY3.32.322",
+                            "vat_rate": 20,
+                            "total_amount": 1400.0,
+                        },
+                        {
+                            "stock_code": "67899009",
+                            "vat_rate": 0,
+                            "total_amount": 500.0,
+                        },
+                        {
+                            "stock_code": "6899008",
+                            "vat_rate": 0,
+                            "total_amount": 100.0,
+                        },
+                    ],
+                },
+            )
+            self.assertEqual(fuel_response.status_code, 200)
+            fuel_receipt = fuel_response.json()["receipt"]
+            fuel_items = dashboard_store.receipt_items(fuel_receipt["id"])
+            self.assertEqual(
+                [item["stock_code"] for item in fuel_items],
+                ["GY3.32.322", "67899009", "6899008"],
+            )
+            self.assertEqual([item["vat_rate"] for item in fuel_items], [20, 0, 0])
         finally:
             web.sync_receipt_if_ready = original_sync
 
