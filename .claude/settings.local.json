@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ollama --version)",
+      "Bash(ollama list:*)",
+      "Bash(sysctl -n machdep.cpu.brand_string)",
+      "Bash(sysctl -n hw.memsize)",
+      "Read(//Users/alper/Documents/Repo/fisbot/{print $0/1024/1024/**)",
+      "Bash(system_profiler SPHardwareDataType)",
+      "Bash(pip3 --version)",
+      "Bash(ollama show:*)",
+      "Bash(brew list:*)",
+      "Bash(curl -s http://localhost:11434/api/tags)",
+      "Bash(python3 -m json.tool)",
+      "Bash(diskutil info:*)",
+      "Bash(brew install:*)",
+      "Bash(/opt/homebrew/bin/python3.12 -m venv /Users/alper/Documents/Repo/fisbot/.venv)",
+      "Bash(/Users/alper/Documents/Repo/fisbot/.venv/bin/pip install:*)",
+      "Bash(/Users/alper/Documents/Repo/fisbot/.venv/bin/python3.12 -c \"from fisbot.config import *; from fisbot.parser import *; from fisbot.storage import *; from fisbot.prompt import *; from fisbot.image_utils import *; print\\(''All imports OK''\\)\")",
+      "Bash(/Users/alper/Documents/Repo/fisbot/.venv/bin/python -c \"import fisbot; print\\(fisbot.__file__\\)\")",
+      "Bash(/Users/alper/Documents/Repo/fisbot/.venv/bin/python -c \"import sys; print\\([p for p in sys.path if ''fisbot'' in p]\\)\")",
+      "Bash(/Users/alper/Documents/Repo/fisbot/.venv/bin/python -c \"import site; site.main\\(\\); import fisbot; print\\(fisbot.__file__\\)\")",
+      "Bash(PYTHONPATH=/Users/alper/Documents/Repo/fisbot/src /Users/alper/Documents/Repo/fisbot/.venv/bin/python -c \"import fisbot; print\\(fisbot.__file__\\)\")",
+      "Bash(/Users/alper/Documents/Repo/fisbot/.venv/bin/python -c \"from fisbot.main import main; print\\(''OK''\\)\")",
+      "Bash(.venv/bin/pip install:*)",
+      "WebSearch",
+      "Bash(pip install:*)",
+      "Bash(python3 -m pip install gspread google-auth)",
+      "Bash(.venv/bin/python -c \":*)"
+    ]
+  }
+}

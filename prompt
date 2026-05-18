@@ -1,0 +1,45 @@
+çıkan sonuçları 19ocBMWXsv3awOCaJLErqT-BVlCYYL1PvYIAfQflWFlk id'li google spreadsheet'e eklemeni istiyorum. sütünları sırasıyla söyliyim
+'' içindekileri direk yazıyoruz diğerleri bilgisini mesela Fiş Tarihi dediğim yere fişin tarihini.
+A - 'Perakende Satış Fişi'
+B - Fiş Tarihi
+C - 'A'
+D - Fiş No
+E - '100'
+F - ''
+G - Stok kodu
+H - '1'
+I - Satırın Net tutarı
+J - Satırın net tutarı
+K - KDV oranı yüzde 1'se 1. yüzde 10'sa 10 şeklinde.
+L - KDV tutarı
+M - ''
+N - ''
+O - Satırın toplam tutarı.
+P - 'PERAKENDE SATIŞ FİŞİ'
+Q - ''
+R - ''
+S - Satırın toplam tutarı.
+
+Mesela 230 TL toplam tutarı olan bir ürün var satırda %10 kdv oranlı. onu şu şekilde yazacak
+
+A - Perakende Satış Fişi
+B - 23.03.2026
+C - A
+D - 0006
+E - 100
+F - 
+G - GY3.31.318
+H - 1
+I - 209,09
+J - 209,09
+K - 10
+L - 20,91
+M - 
+N - 
+O - 230
+P - PERAKENDE SATIŞ FİŞİ
+Q - 
+R - 
+S - 230
+
+Google sheets'e bağlanman için gereken ne var?
