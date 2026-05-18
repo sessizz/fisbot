@@ -252,6 +252,8 @@ class WebV2Tests(unittest.TestCase):
             self.assertIn("event.altKey", manual_html)
             self.assertIn("receiptFieldOrder", manual_html)
             self.assertIn("fuelMode", manual_html)
+            self.assertIn("controlTargetVat", manual_html)
+            self.assertIn("fuel_mode: fuelMode.checked", manual_html)
             self.assertIn("67899009", manual_html)
             response = client.post(
                 "/api/manual-receipts",
@@ -277,8 +279,9 @@ class WebV2Tests(unittest.TestCase):
                 json={
                     "receipt_date": "04.05.2026",
                     "receipt_no": "BENZIN-1",
-                    "total_vat": 233.33,
+                    "total_vat": 333.33,
                     "grand_total": 2000.0,
+                    "fuel_mode": True,
                     "items": [
                         {
                             "stock_code": "GY3.32.322",

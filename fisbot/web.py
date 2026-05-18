@@ -54,6 +54,7 @@ class ManualReceiptCreate(BaseModel):
     receipt_no: str
     total_vat: float
     grand_total: float
+    fuel_mode: bool = False
     items: list[ManualItem]
 
 
@@ -641,6 +642,11 @@ async def manual_entry() -> str:
       };
     }
 
+    function controlTargetVat() {
+      const targetVat = numberValue(fields.targetVat.value);
+      return fuelMode.checked ? roundMoney(targetVat * 0.70) : targetVat;
+    }
+
     function stockOptions(selected) {
       return `<option value="">Stok sec</option>` + state.stockOptions.map((option) => `
         <option value="${esc(option.code)}" ${option.code === selected ? "selected" : ""}>${esc(option.code)} - ${esc(option.name)}</option>
@@ -689,7 +695,7 @@ async def manual_entry() -> str:
 
     function renderSummary() {
       const targetTotal = numberValue(fields.targetTotal.value);
-      const targetVat = numberValue(fields.targetVat.value);
+      const targetVat = controlTargetVat();
       const totals = state.rows.reduce((acc, row) => {
         const calc = calcLine(row);
         acc.total += calc.total_amount;
@@ -710,7 +716,7 @@ async def manual_entry() -> str:
 
     function isReady() {
       const targetTotal = numberValue(fields.targetTotal.value);
-      const targetVat = numberValue(fields.targetVat.value);
+      const targetVat = controlTargetVat();
       const totals = state.rows.reduce((acc, row) => {
         const calc = calcLine(row);
         acc.total += calc.total_amount;
@@ -755,6 +761,7 @@ async def manual_entry() -> str:
       render();
     });
     Object.values(fields).forEach((field) => field.addEventListener("input", renderSummary));
+    fuelMode.addEventListener("change", renderSummary);
     fields.receiptDate.addEventListener("blur", () => {
       fields.receiptDate.value = formatDateInput(fields.receiptDate.value);
       renderSummary();
@@ -835,6 +842,7 @@ async def manual_entry() -> str:
             receipt_no: fields.receiptNo.value.trim(),
             total_vat: numberValue(fields.targetVat.value),
             grand_total: numberValue(fields.targetTotal.value),
+            fuel_mode: fuelMode.checked,
             items
           })
         });
@@ -924,7 +932,8 @@ async def api_create_manual_receipt(payload: ManualReceiptCreate) -> dict[str, A
 
     if abs(round(total, 2) - round(payload.grand_total, 2)) >= 0.05:
         raise HTTPException(status_code=400, detail="Grand total does not match items")
-    if abs(round(total_vat, 2) - round(payload.total_vat, 2)) >= 0.05:
+    expected_total_vat = payload.total_vat * 0.70 if payload.fuel_mode else payload.total_vat
+    if abs(round(total_vat, 2) - round(expected_total_vat, 2)) >= 0.05:
         raise HTTPException(status_code=400, detail="VAT total does not match items")
 
     receipt = await asyncio.to_thread(
