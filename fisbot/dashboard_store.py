@@ -664,6 +664,68 @@ def update_receipt_fields(receipt_id: str, values: dict[str, Any]) -> dict[str, 
     return get_receipt(receipt_id)
 
 
+def recalculate_receipt_totals(receipt_id: str) -> dict[str, Any]:
+    init_db()
+    with _connect() as conn:
+        totals = conn.execute(
+            """
+            SELECT
+                COALESCE(SUM(vat_amount), 0) AS total_vat,
+                COALESCE(SUM(total_amount), 0) AS grand_total,
+                COUNT(*) AS item_count
+            FROM receipt_items
+            WHERE receipt_id = ?
+            """,
+            (receipt_id,),
+        ).fetchone()
+        conn.execute(
+            """
+            UPDATE receipts
+            SET total_vat = ?,
+                grand_total = ?,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                round(float(totals["total_vat"] or 0), 2),
+                round(float(totals["grand_total"] or 0), 2),
+                now_iso(),
+                receipt_id,
+            ),
+        )
+        if totals["item_count"] == 0:
+            conn.execute(
+                """
+                INSERT INTO review_tasks (
+                    created_at,
+                    receipt_id,
+                    item_id,
+                    field_name,
+                    label,
+                    current_value
+                )
+                SELECT ?, ?, NULL, 'items', 'Ürün satırları', ''
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM review_tasks
+                    WHERE receipt_id = ? AND field_name = 'items' AND status = 'open'
+                )
+                """,
+                (now_iso(), receipt_id, receipt_id),
+            )
+        else:
+            conn.execute(
+                """
+                UPDATE review_tasks
+                SET status = 'done', completed_at = ?
+                WHERE receipt_id = ? AND field_name IN ('grand_total', 'total_vat')
+                """,
+                (now_iso(), receipt_id),
+            )
+    _refresh_receipt_review_state(receipt_id)
+    return get_receipt(receipt_id)
+
+
 def update_item_fields(item_id: int, values: dict[str, Any]) -> dict[str, Any]:
     values = {key: value for key, value in values.items() if value is not None}
     allowed = {
@@ -713,8 +775,33 @@ def update_item_fields(item_id: int, values: dict[str, Any]) -> dict[str, Any]:
                 (timestamp, item_id, field_name),
             )
     _refresh_item_review_state(item_id)
+    recalculate_receipt_totals(receipt_id)
     _refresh_receipt_review_state(receipt_id)
     return get_item(item_id)
+
+
+def delete_item(item_id: int) -> dict[str, Any]:
+    init_db()
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT receipt_id FROM receipt_items WHERE id = ?",
+            (item_id,),
+        ).fetchone()
+        if row is None:
+            raise ValueError("Receipt item not found")
+        receipt_id = row["receipt_id"]
+        conn.execute(
+            """
+            UPDATE review_tasks
+            SET status = 'done', completed_at = ?
+            WHERE item_id = ?
+            """,
+            (now_iso(), item_id),
+        )
+        conn.execute("DELETE FROM receipt_items WHERE id = ?", (item_id,))
+    recalculate_receipt_totals(receipt_id)
+    _refresh_receipt_review_state(receipt_id)
+    return get_receipt(receipt_id)
 
 
 def get_item(item_id: int) -> dict[str, Any]:

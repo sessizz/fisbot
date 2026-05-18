@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from fisbot.dashboard_events import publish_event, subscribe
 from fisbot.dashboard_store import (
+    delete_item,
     get_receipt,
     recent_events,
     recent_receipt_items,
@@ -277,7 +278,7 @@ async def dashboard() -> str:
                     <th class="px-3 py-2">Net</th>
                     <th class="px-3 py-2">KDV tutar</th>
                     <th class="px-3 py-2">Toplam</th>
-                    <th class="px-3 py-2"></th>
+                    <th class="w-[128px] px-3 py-2"></th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-line">
@@ -290,6 +291,9 @@ async def dashboard() -> str:
                 ${detail.tasks.filter((task) => task.status === "open").map((task) => esc(task.label)).join(", ")} bekliyor.
               </div>
             ` : ""}
+            <div class="rounded-md bg-zinc-50 p-3 text-sm text-zinc-600">
+              Kalemleri kaydedince veya silince genel toplam ve toplam KDV otomatik yeniden hesaplanir.
+            </div>
           </div>
         </div>
       `;
@@ -313,7 +317,12 @@ async def dashboard() -> str:
           <td class="px-3 py-2"><input name="net_amount" value="${esc(item.net_amount ?? "")}" class="h-9 w-24 rounded border border-line px-2" /></td>
           <td class="px-3 py-2"><input name="vat_amount" value="${esc(item.vat_amount ?? "")}" class="h-9 w-24 rounded border border-line px-2" /></td>
           <td class="px-3 py-2"><input name="total_amount" value="${esc(item.total_amount ?? "")}" class="h-9 w-24 rounded border border-line px-2" /></td>
-          <td class="px-3 py-2 text-right"><button class="rounded-md bg-leaf px-3 py-2 text-xs font-semibold text-white" type="button">Kaydet</button></td>
+          <td class="px-3 py-2 text-right">
+            <div class="flex justify-end gap-2">
+              <button class="rounded-md bg-leaf px-3 py-2 text-xs font-semibold text-white" data-action="save" type="button">Kaydet</button>
+              <button class="rounded-md border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50" data-action="delete" type="button">Sil</button>
+            </div>
+          </td>
         </tr>
       `;
     }
@@ -415,6 +424,12 @@ async def dashboard() -> str:
       const button = event.target.closest("tr button");
       if (!button) return;
       const row = button.closest("tr[data-item-id]");
+      if (button.dataset.action === "delete") {
+        const response = await fetch(`/api/items/${row.dataset.itemId}`, {method: "DELETE"});
+        state.detail = await response.json();
+        renderDetail();
+        return;
+      }
       const body = {};
       row.querySelectorAll("input, select").forEach((input) => {
         body[input.name] = input.name.endsWith("_amount") || input.name === "vat_rate"
@@ -508,6 +523,22 @@ async def api_update_item(item_id: int, update: ItemUpdate) -> dict[str, Any]:
     await emit_status("Kalem guncellendi", "Fis kalemi kaydedildi.", receipt_id=row["receipt_id"])
     await publish_receipt_update(row["receipt_id"])
     return await asyncio.to_thread(receipt_detail, row["receipt_id"])
+
+
+@app.delete("/api/items/{item_id}")
+async def api_delete_item(item_id: int) -> dict[str, Any]:
+    try:
+        receipt = await asyncio.to_thread(delete_item, item_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    await sync_receipt_if_ready(receipt["id"])
+    await emit_status(
+        "Kalem silindi",
+        "Fis toplamlari yeniden hesaplandi.",
+        receipt_id=receipt["id"],
+    )
+    await publish_receipt_update(receipt["id"])
+    return await asyncio.to_thread(receipt_detail, receipt["id"])
 
 
 @app.post("/api/items/{item_id}/stock")

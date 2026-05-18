@@ -129,6 +129,70 @@ class StoreV2Tests(unittest.TestCase):
         updated = dashboard_store.get_receipt(record["id"])
         self.assertEqual(updated["status"], "ready_to_sync")
 
+    def test_item_update_and_delete_recalculate_receipt_totals(self):
+        record = dashboard_store.create_receipt(
+            image_path=self.image_path,
+            telegram_user_id=1,
+            telegram_user_name="Tester",
+        )
+        receipt = parse_receipt_response(
+            """
+            {
+              "receipts": [{
+                "tarih": "01.05.2026",
+                "fis_no": "77",
+                "urunler": [
+                  {
+                    "ad": "A",
+                    "stok": "GY3.30.303",
+                    "kdv_oran": 10,
+                    "toplam": 110,
+                    "kdv": 10,
+                    "net": 100
+                  },
+                  {
+                    "ad": "NOISE",
+                    "stok": "GY4.49.501",
+                    "kdv_oran": 20,
+                    "toplam": 120,
+                    "kdv": 20,
+                    "net": 100
+                  }
+                ],
+                "genel_toplam": 230
+              }]
+            }
+            """
+        )[0]
+        dashboard_store.save_receipt_extraction(
+            record["id"],
+            receipt,
+            raw_extraction={},
+            raw_verification={},
+            warnings=[],
+        )
+        detail = dashboard_store.receipt_detail(record["id"])
+        first_id = detail["items"][0]["id"]
+        second_id = detail["items"][1]["id"]
+
+        dashboard_store.update_item_fields(
+            first_id,
+            {
+                "total_amount": 220.0,
+                "vat_amount": 20.0,
+                "net_amount": 200.0,
+            },
+        )
+        updated = dashboard_store.get_receipt(record["id"])
+        self.assertEqual(updated["grand_total"], 340.0)
+        self.assertEqual(updated["total_vat"], 40.0)
+
+        dashboard_store.delete_item(second_id)
+        updated = dashboard_store.get_receipt(record["id"])
+        self.assertEqual(updated["grand_total"], 220.0)
+        self.assertEqual(updated["total_vat"], 20.0)
+        self.assertEqual(len(dashboard_store.receipt_items(record["id"])), 1)
+
 
 class WebV2Tests(unittest.TestCase):
     def setUp(self):
