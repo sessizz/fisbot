@@ -244,7 +244,10 @@ class WebV2Tests(unittest.TestCase):
         web.sync_receipt_if_ready = fake_sync
         try:
             client = TestClient(app)
-            self.assertIn("Fis giris", client.get("/manual").text)
+            manual_html = client.get("/manual").text
+            self.assertIn("Fis giris", manual_html)
+            self.assertIn("Satir olustur", manual_html)
+            self.assertIn("formatDateInput", manual_html)
             response = client.post(
                 "/api/manual-receipts",
                 json={

@@ -511,7 +511,10 @@ async def manual_entry() -> str:
     <section class="grid gap-4 py-5 lg:grid-cols-[minmax(0,1fr)_300px]">
       <section class="space-y-4">
         <section class="rounded-lg border border-line bg-white p-4 shadow-sm">
-          <h2 class="text-base font-semibold">Fis bilgileri</h2>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2 class="text-base font-semibold">Fis bilgileri</h2>
+            <button id="createSummaryRow" class="rounded-md border border-line px-3 py-2 text-sm font-semibold hover:bg-zinc-50" type="button">Satir olustur</button>
+          </div>
           <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label class="block">
               <span class="text-xs font-medium text-zinc-500">Tarih</span>
@@ -597,6 +600,21 @@ async def manual_entry() -> str:
 
     function fmt(value) {
       return money.format(Number(value || 0));
+    }
+
+    function formatDateInput(value) {
+      const digits = String(value ?? "").split("").filter((char) => char >= "0" && char <= "9").join("");
+      if (digits.length !== 8) return value;
+      return `${digits.slice(0, 2)}.${digits.slice(2, 4)}.${digits.slice(4)}`;
+    }
+
+    function guessVatRate(total, vat) {
+      const net = total - vat;
+      if (net <= 0 || vat <= 0) return 10;
+      const actual = Math.round((vat / net) * 100);
+      return [1, 10, 20].reduce((best, rate) =>
+        Math.abs(rate - actual) < Math.abs(best - actual) ? rate : best
+      , 10);
     }
 
     function calcLine(row) {
@@ -709,8 +727,28 @@ async def manual_entry() -> str:
       render();
     });
     Object.values(fields).forEach((field) => field.addEventListener("input", renderSummary));
+    fields.receiptDate.addEventListener("blur", () => {
+      fields.receiptDate.value = formatDateInput(fields.receiptDate.value);
+      renderSummary();
+    });
     document.getElementById("addRow").addEventListener("click", () => addRow());
+    document.getElementById("createSummaryRow").addEventListener("click", () => {
+      fields.receiptDate.value = formatDateInput(fields.receiptDate.value);
+      const total = numberValue(fields.targetTotal.value);
+      const vat = numberValue(fields.targetVat.value);
+      if (total <= 0) {
+        alert("Önce toplam tutarı girin.");
+        return;
+      }
+      state.rows = [];
+      addRow({
+        item_name: "Fiş toplamı",
+        vat_rate: guessVatRate(total, vat),
+        total_amount: fields.targetTotal.value
+      });
+    });
     document.getElementById("saveReceipt").addEventListener("click", async () => {
+      fields.receiptDate.value = formatDateInput(fields.receiptDate.value);
       if (!isReady()) {
         alert("Fis toplamları ve kalemler tamamlanmadan kaydedilemez.");
         return;
