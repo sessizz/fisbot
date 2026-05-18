@@ -248,6 +248,8 @@ class WebV2Tests(unittest.TestCase):
             self.assertIn("Fis giris", manual_html)
             self.assertIn("Satir olustur", manual_html)
             self.assertIn("formatDateInput", manual_html)
+            self.assertIn("saveManualReceipt", manual_html)
+            self.assertIn("event.altKey", manual_html)
             response = client.post(
                 "/api/manual-receipts",
                 json={

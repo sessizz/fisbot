@@ -572,7 +572,7 @@ async def manual_entry() -> str:
   </main>
 
   <script>
-    const state = { stockOptions: [], rows: [] };
+    const state = { stockOptions: [], rows: [], saving: false };
     const money = new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const rowsEl = document.getElementById("manualRows");
     const fields = {
@@ -631,7 +631,13 @@ async def manual_entry() -> str:
       `).join("");
     }
 
-    function addRow(row = {}) {
+    function focusLastStockSelect() {
+      const selects = rowsEl.querySelectorAll('select[name="stock_code"]');
+      const last = selects[selects.length - 1];
+      if (last) last.focus();
+    }
+
+    function addRow(row = {}, options = {}) {
       state.rows.push({
         id: crypto.randomUUID(),
         stock_code: row.stock_code || "",
@@ -639,6 +645,9 @@ async def manual_entry() -> str:
         total_amount: row.total_amount || ""
       });
       render();
+      if (options.focusStock) {
+        requestAnimationFrame(focusLastStockSelect);
+      }
     }
 
     function render() {
@@ -734,8 +743,9 @@ async def manual_entry() -> str:
       fields.receiptDate.value = formatDateInput(fields.receiptDate.value);
       renderSummary();
     });
+    const saveButton = document.getElementById("saveReceipt");
     document.getElementById("addRow").addEventListener("click", () => addRow());
-    document.getElementById("createSummaryRow").addEventListener("click", () => {
+    function createSummaryRow() {
       fields.receiptDate.value = formatDateInput(fields.receiptDate.value);
       const total = numberValue(fields.targetTotal.value);
       const vat = numberValue(fields.targetVat.value);
@@ -747,37 +757,60 @@ async def manual_entry() -> str:
       addRow({
         vat_rate: guessVatRate(total, vat),
         total_amount: fields.targetTotal.value
-      });
+      }, {focusStock: true});
+    }
+    document.getElementById("createSummaryRow").addEventListener("click", createSummaryRow);
+    fields.targetTotal.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      createSummaryRow();
     });
-    document.getElementById("saveReceipt").addEventListener("click", async () => {
+    async function saveManualReceipt() {
+      if (state.saving) return;
       fields.receiptDate.value = formatDateInput(fields.receiptDate.value);
       if (!isReady()) {
         alert("Fis toplamları ve kalemler tamamlanmadan kaydedilemez.");
         return;
       }
+      state.saving = true;
+      saveButton.disabled = true;
+      saveButton.textContent = "Kaydediliyor...";
       const items = state.rows.map((row) => ({...row, ...calcLine(row), vat_rate: Number(row.vat_rate)}));
-      const response = await fetch("/api/manual-receipts", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
-          receipt_date: fields.receiptDate.value.trim(),
-          receipt_no: fields.receiptNo.value.trim(),
-          total_vat: numberValue(fields.targetVat.value),
-          grand_total: numberValue(fields.targetTotal.value),
-          items
-        })
-      });
       const resultBox = document.getElementById("resultBox");
       resultBox.classList.remove("hidden");
-      if (!response.ok) {
-        resultBox.className = "rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 shadow-sm";
-        resultBox.textContent = "Kayit basarisiz.";
-        return;
+      try {
+        const response = await fetch("/api/manual-receipts", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            receipt_date: fields.receiptDate.value.trim(),
+            receipt_no: fields.receiptNo.value.trim(),
+            total_vat: numberValue(fields.targetVat.value),
+            grand_total: numberValue(fields.targetTotal.value),
+            items
+          })
+        });
+        if (!response.ok) {
+          resultBox.className = "rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 shadow-sm";
+          resultBox.textContent = "Kayit basarisiz.";
+          return;
+        }
+        const detail = await response.json();
+        resultBox.className = "rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 shadow-sm";
+        resultBox.innerHTML = `Kaydedildi ve Sheets'e gonderildi. <a class="font-semibold underline" href="/#${detail.receipt.id}">Panelde ac</a>`;
+        resetManualForm();
+      } finally {
+        state.saving = false;
+        saveButton.disabled = false;
+        saveButton.textContent = "Kaydet ve Sheets'e yaz";
       }
-      const detail = await response.json();
-      resultBox.className = "rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 shadow-sm";
-      resultBox.innerHTML = `Kaydedildi ve Sheets'e gonderildi. <a class="font-semibold underline" href="/#${detail.receipt.id}">Panelde ac</a>`;
-      resetManualForm();
+    }
+    saveButton.addEventListener("click", saveManualReceipt);
+    document.addEventListener("keydown", (event) => {
+      if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      if (event.key.toLowerCase() !== "k") return;
+      event.preventDefault();
+      saveManualReceipt();
     });
 
     async function boot() {
