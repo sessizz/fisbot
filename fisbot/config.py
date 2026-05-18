@@ -18,7 +18,9 @@ GEMINI_MODELS: list[str] = [
     if m.strip()
 ]
 
-DATA_DIR: Path = Path(__file__).resolve().parent.parent / "data"
+DATA_DIR: Path = Path(
+    os.getenv("DATA_DIR", Path(__file__).resolve().parent.parent / "data")
+)
 
 # Comma-separated Telegram user IDs that are allowed to use the bot.
 # Leave empty to allow everyone (not recommended for production).
@@ -28,7 +30,14 @@ ALLOWED_USERS: list[int] = [int(uid.strip()) for uid in _allowed.split(",") if u
 MAX_IMAGE_DIMENSION: int = 2048
 
 # Google Sheets
-GOOGLE_SHEETS_CREDENTIALS: Path = Path(__file__).resolve().parent.parent / "credentials.json"
-GOOGLE_SPREADSHEET_ID: str = os.getenv(
-    "GOOGLE_SPREADSHEET_ID", "19ocBMWXsv3awOCaJLErqT-BVlCYYL1PvYIAfQflWFlk"
+GOOGLE_SHEETS_CREDENTIALS_PATH: Path = Path(
+    os.getenv(
+        "GOOGLE_SHEETS_CREDENTIALS_PATH",
+        Path(__file__).resolve().parent.parent / "credentials.json",
+    )
+)
+GOOGLE_SHEETS_CREDENTIALS_JSON: str = os.getenv("GOOGLE_SHEETS_CREDENTIALS_JSON", "")
+SPREADSHEET_ID: str = os.getenv(
+    "SPREADSHEET_ID",
+    os.getenv("GOOGLE_SPREADSHEET_ID", "19ocBMWXsv3awOCaJLErqT-BVlCYYL1PvYIAfQflWFlk"),
 )

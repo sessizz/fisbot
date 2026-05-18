@@ -1,6 +1,8 @@
 .env
+.env.coolify.local
 credentials.json
 __pycache__/
+.pycache_tmp/
 *.pyc
 .venv/
 venv/

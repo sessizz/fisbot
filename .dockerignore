@@ -1,0 +1,16 @@
+.git
+.claude
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+build
+dist
+.DS_Store
+
+.env
+credentials.json
+data
+tests

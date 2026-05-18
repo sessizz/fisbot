@@ -1,10 +1,15 @@
+import json
 import logging
 import re
 
 import gspread
 from google.oauth2.service_account import Credentials
 
-from fisbot.config import GOOGLE_SHEETS_CREDENTIALS, GOOGLE_SPREADSHEET_ID
+from fisbot.config import (
+    GOOGLE_SHEETS_CREDENTIALS_JSON,
+    GOOGLE_SHEETS_CREDENTIALS_PATH,
+    SPREADSHEET_ID,
+)
 from fisbot.parser import ReceiptData
 
 logger = logging.getLogger(__name__)
@@ -20,9 +25,15 @@ _client: gspread.Client | None = None
 def _get_client() -> gspread.Client:
     global _client
     if _client is None:
-        creds = Credentials.from_service_account_file(
-            str(GOOGLE_SHEETS_CREDENTIALS), scopes=SCOPES
-        )
+        if GOOGLE_SHEETS_CREDENTIALS_JSON:
+            service_account_info = json.loads(GOOGLE_SHEETS_CREDENTIALS_JSON)
+            creds = Credentials.from_service_account_info(
+                service_account_info, scopes=SCOPES
+            )
+        else:
+            creds = Credentials.from_service_account_file(
+                str(GOOGLE_SHEETS_CREDENTIALS_PATH), scopes=SCOPES
+            )
         _client = gspread.authorize(creds)
     return _client
 
@@ -43,7 +54,7 @@ def _normalize_date(date_str: str | None) -> str:
 def append_receipt_to_sheet(receipt: ReceiptData) -> int:
     """Append receipt rows to Google Spreadsheet. Returns number of rows added."""
     client = _get_client()
-    sheet = client.open_by_key(GOOGLE_SPREADSHEET_ID).sheet1
+    sheet = client.open_by_key(SPREADSHEET_ID).sheet1
 
     tarih = _normalize_date(receipt.tarih)
 
