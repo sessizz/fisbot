@@ -2,13 +2,27 @@ import asyncio
 import json
 from typing import Any
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse, StreamingResponse
+from pydantic import BaseModel
 
+from fisbot.dashboard_events import publish_event
 from fisbot.dashboard_events import subscribe
-from fisbot.dashboard_store import recent_receipt_items
+from fisbot.dashboard_store import (
+    mark_receipt_group_appended,
+    pending_stock_items,
+    receipt_group_ready_for_sheet,
+    recent_receipt_items,
+    stock_code_options,
+    update_item_stock,
+)
+from fisbot.sheets import append_dashboard_rows_to_sheet
 
 app = FastAPI(title="FisBot Dashboard")
+
+
+class StockSelection(BaseModel):
+    stock_code: str
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -73,6 +87,17 @@ async def dashboard() -> str:
             </div>
           </dl>
         </div>
+
+        <div class="rounded-lg border border-line bg-white p-4 shadow-sm">
+          <div class="flex items-center justify-between">
+            <h2 class="text-base font-semibold">Stok secimi</h2>
+            <span id="pendingCount" class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">0 bekliyor</span>
+          </div>
+          <div id="pendingEmpty" class="mt-4 rounded-md bg-zinc-50 p-3 text-sm text-zinc-500">
+            Secim bekleyen fis satiri yok.
+          </div>
+          <div id="pendingRows" class="mt-4 space-y-3"></div>
+        </div>
       </aside>
 
       <section class="min-w-0 rounded-lg border border-line bg-white shadow-sm">
@@ -109,7 +134,7 @@ async def dashboard() -> str:
   </main>
 
   <script>
-    const state = { rows: [], events: 0, query: "" };
+    const state = { rows: [], pending: [], stockOptions: [], events: 0, query: "" };
     const rowsEl = document.getElementById("rows");
     const emptyEl = document.getElementById("empty");
     const searchEl = document.getElementById("search");
@@ -119,6 +144,9 @@ async def dashboard() -> str:
     const totalAmountEl = document.getElementById("totalAmount");
     const connectionDotEl = document.getElementById("connectionDot");
     const connectionTextEl = document.getElementById("connectionText");
+    const pendingRowsEl = document.getElementById("pendingRows");
+    const pendingEmptyEl = document.getElementById("pendingEmpty");
+    const pendingCountEl = document.getElementById("pendingCount");
 
     const money = new Intl.NumberFormat("tr-TR", {
       minimumFractionDigits: 2,
@@ -158,7 +186,9 @@ async def dashboard() -> str:
         <tr class="hover:bg-mint/30">
           <td class="truncate px-3 py-3">${esc(row.receipt_date || "-")}</td>
           <td class="truncate px-3 py-3">${esc(row.receipt_no || "-")}</td>
-          <td class="truncate px-3 py-3 font-mono text-xs">${esc(row.stock_code)}</td>
+          <td class="truncate px-3 py-3 font-mono text-xs">
+            ${row.needs_stock_review ? '<span class="rounded bg-amber-100 px-2 py-1 text-amber-700">Sec</span>' : esc(row.stock_code)}
+          </td>
           <td class="min-w-0 px-3 py-3">
             <div class="truncate font-medium">${esc(row.stock_name)}</div>
             <div class="mt-0.5 truncate text-xs text-zinc-500">${esc(row.item_name)}</div>
@@ -176,11 +206,50 @@ async def dashboard() -> str:
       );
     }
 
+    function renderPending() {
+      pendingCountEl.textContent = `${state.pending.length} bekliyor`;
+      pendingEmptyEl.classList.toggle("hidden", state.pending.length > 0);
+      pendingRowsEl.innerHTML = state.pending.map((row) => `
+        <article class="rounded-md border border-amber-200 bg-amber-50 p-3" data-pending-id="${row.id}">
+          <div class="text-xs font-medium text-amber-700">${esc(row.receipt_date || "-")} · Fis ${esc(row.receipt_no || "-")}</div>
+          <div class="mt-1 text-sm font-semibold">${esc(row.item_name)}</div>
+          <div class="mt-1 text-xs text-zinc-600">KDV %${esc(row.vat_rate ?? "-")} · Toplam ${money.format(Number(row.total_amount || 0))}</div>
+          <div class="mt-3 flex gap-2">
+            <select class="min-w-0 flex-1 rounded-md border border-amber-200 bg-white px-2 py-2 text-sm outline-none ring-leaf/20 focus:ring-4">
+              <option value="">Stok sec</option>
+              ${state.stockOptions.map((option) => `
+                <option value="${esc(option.code)}">${esc(option.code)} - ${esc(option.name)}</option>
+              `).join("")}
+            </select>
+            <button class="rounded-md bg-leaf px-3 py-2 text-sm font-semibold text-white" type="button">Kaydet</button>
+          </div>
+        </article>
+      `).join("");
+    }
+
+    function addPending(rows) {
+      const known = new Set(state.pending.map((row) => row.id));
+      const next = rows.filter((row) => row.needs_stock_review && !known.has(row.id));
+      state.pending = [...next, ...state.pending];
+      renderPending();
+    }
+
+    function upsertRow(row) {
+      const index = state.rows.findIndex((existing) => existing.id === row.id);
+      if (index === -1) {
+        state.rows = [row, ...state.rows].slice(0, 250);
+      } else {
+        state.rows[index] = row;
+      }
+      renderRows();
+    }
+
     function addRows(rows) {
       const known = new Set(state.rows.map((row) => row.id));
       const next = rows.filter((row) => !known.has(row.id));
       state.rows = [...next, ...state.rows].slice(0, 250);
       renderRows();
+      addPending(rows);
     }
 
     function addEvent(event) {
@@ -201,9 +270,15 @@ async def dashboard() -> str:
       }
     }
 
-    async function loadRecent() {
-      const response = await fetch("/api/recent?limit=100");
-      addRows(await response.json());
+    async function loadInitialData() {
+      const [stockResponse, recentResponse, pendingResponse] = await Promise.all([
+        fetch("/api/stock-codes"),
+        fetch("/api/recent?limit=100"),
+        fetch("/api/pending-stock?limit=50")
+      ]);
+      state.stockOptions = await stockResponse.json();
+      addRows(await recentResponse.json());
+      addPending(await pendingResponse.json());
     }
 
     function connectEvents() {
@@ -214,6 +289,12 @@ async def dashboard() -> str:
         const event = JSON.parse(message.data);
         if (event.type === "receipt_rows") {
           addRows(event.rows || []);
+        } else if (event.type === "stock_review") {
+          addPending(event.rows || []);
+        } else if (event.type === "stock_updated") {
+          upsertRow(event.row);
+          state.pending = state.pending.filter((row) => row.id !== event.row.id);
+          renderPending();
         } else if (event.type === "status") {
           addEvent(event);
         }
@@ -225,7 +306,37 @@ async def dashboard() -> str:
       renderRows();
     });
 
-    loadRecent();
+    pendingRowsEl.addEventListener("click", async (event) => {
+      const button = event.target.closest("button");
+      if (!button) return;
+
+      const card = button.closest("[data-pending-id]");
+      const select = card.querySelector("select");
+      const stockCode = select.value;
+      if (!stockCode) return;
+
+      button.disabled = true;
+      button.textContent = "Kaydediliyor";
+      const response = await fetch(`/api/items/${card.dataset.pendingId}/stock`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({stock_code: stockCode})
+      });
+
+      if (!response.ok) {
+        button.disabled = false;
+        button.textContent = "Kaydet";
+        alert("Stok kodu kaydedilemedi.");
+        return;
+      }
+
+      const payload = await response.json();
+      upsertRow(payload.row);
+      state.pending = state.pending.filter((row) => row.id !== payload.row.id);
+      renderPending();
+    });
+
+    loadInitialData();
     connectEvents();
   </script>
 </body>
@@ -236,6 +347,55 @@ async def dashboard() -> str:
 @app.get("/api/recent")
 async def api_recent(limit: int = Query(default=100, ge=1, le=500)) -> list[dict[str, Any]]:
     return await asyncio.to_thread(recent_receipt_items, limit)
+
+
+@app.get("/api/pending-stock")
+async def api_pending_stock(
+    limit: int = Query(default=50, ge=1, le=200)
+) -> list[dict[str, Any]]:
+    return await asyncio.to_thread(pending_stock_items, limit)
+
+
+@app.get("/api/stock-codes")
+async def api_stock_codes() -> list[dict[str, str]]:
+    return stock_code_options()
+
+
+@app.post("/api/items/{item_id}/stock")
+async def api_select_stock(item_id: int, selection: StockSelection) -> dict[str, Any]:
+    try:
+        row = await asyncio.to_thread(
+            update_item_stock, item_id, selection.stock_code
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    await publish_event({"type": "stock_updated", "row": row})
+
+    ready_rows = await asyncio.to_thread(
+        receipt_group_ready_for_sheet, row["receipt_group_id"]
+    )
+    if ready_rows:
+        try:
+            row_count = await asyncio.to_thread(append_dashboard_rows_to_sheet, ready_rows)
+            await asyncio.to_thread(mark_receipt_group_appended, row["receipt_group_id"])
+            await publish_event(
+                {
+                    "type": "status",
+                    "title": "Sheets'e yazildi",
+                    "message": f"{row_count} satir stok seciminden sonra eklendi.",
+                }
+            )
+        except Exception:
+            await publish_event(
+                {
+                    "type": "status",
+                    "title": "Sheets hatasi",
+                    "message": "Stok secildi ama Google Sheets'e yazilamadi.",
+                }
+            )
+
+    return {"row": row}
 
 
 @app.get("/health")

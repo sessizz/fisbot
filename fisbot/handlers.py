@@ -7,7 +7,7 @@ from telegram.ext import ContextTypes
 
 from fisbot.config import ALLOWED_USERS
 from fisbot.dashboard_events import publish_event
-from fisbot.dashboard_store import add_receipt_items
+from fisbot.dashboard_store import add_receipt_items, mark_receipt_group_appended
 from fisbot.image_utils import preprocess_image
 from fisbot.gemini_client import extract_receipt, queue_position_info
 from fisbot.parser import ReceiptData, STOK_KODLARI, parse_receipt_response
@@ -172,10 +172,34 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 "Fis kaydedildi",
                 f"{receipt.fis_no or 'Fis no yok'} icin {len(dashboard_rows)} kalem eklendi.",
             )
+            pending_stock_rows = [
+                row for row in dashboard_rows if row["needs_stock_review"]
+            ]
+            if pending_stock_rows:
+                await publish_event(
+                    {"type": "stock_review", "rows": pending_stock_rows}
+                )
+                await publish_status(
+                    "Stok secimi gerekiyor",
+                    f"{len(pending_stock_rows)} satir icin panelden stok kodu secin.",
+                )
+                sheet_info = (
+                    "⏸ Google Sheets bekliyor: panelden stok kodu seçimi gerekiyor"
+                )
+                summary = format_telegram_summary(receipt)
+                await update.message.reply_text(
+                    summary + f"\n\n✅ Kaydedildi: `{filepath.name}`\n{sheet_info}",
+                    parse_mode="Markdown",
+                )
+                continue
 
             # Append to Google Sheets
             try:
                 row_count = await asyncio.to_thread(append_receipt_to_sheet, receipt)
+                await asyncio.to_thread(
+                    mark_receipt_group_appended,
+                    dashboard_rows[0]["receipt_group_id"],
+                )
                 sheet_info = f"📊 Google Sheets'e {row_count} satır eklendi"
             except Exception as sheets_err:
                 logger.error("Google Sheets error: %s", sheets_err)

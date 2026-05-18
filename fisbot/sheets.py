@@ -88,3 +88,40 @@ def append_receipt_to_sheet(receipt: ReceiptData) -> int:
         logger.info("Appended %d rows to Google Sheet", len(rows))
 
     return len(rows)
+
+
+def append_dashboard_rows_to_sheet(rows_data: list[dict]) -> int:
+    """Append dashboard DB rows to Google Spreadsheet after manual stock review."""
+    client = _get_client()
+    sheet = client.open_by_key(SPREADSHEET_ID).sheet1
+
+    rows = []
+    for item in rows_data:
+        row = [
+            "Perakende Satış Fişi",       # A
+            _normalize_date(item.get("receipt_date")),  # B
+            "A",                            # C
+            item.get("receipt_no") or "",   # D
+            100,                            # E - number
+            "",                             # F
+            item["stock_code"],             # G
+            1,                              # H - number
+            item.get("net_amount"),         # I - number
+            item.get("net_amount"),         # J - number
+            item.get("vat_rate"),           # K - number
+            item.get("vat_amount"),         # L - number
+            "",                             # M
+            "",                             # N
+            item.get("total_amount"),       # O - number
+            "PERAKENDE SATIŞ FİŞİ",        # P
+            "",                             # Q
+            "",                             # R
+            item.get("total_amount"),       # S - number
+        ]
+        rows.append(row)
+
+    if rows:
+        sheet.append_rows(rows, value_input_option="USER_ENTERED")
+        logger.info("Appended %d reviewed rows to Google Sheet", len(rows))
+
+    return len(rows)

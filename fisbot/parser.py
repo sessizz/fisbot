@@ -1,11 +1,12 @@
 import json
 import logging
 import re
-from typing import Literal
 
 from pydantic import BaseModel, field_validator, model_validator
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_STOK_KODU = "GY3.31.318"
 
 STOK_KODLARI = {
     "GY3.30.303": "Gıda/İçecek",
@@ -39,11 +40,31 @@ def _guess_kdv_rate(toplam: float, kdv: float, net: float) -> int:
 
 class ReceiptItem(BaseModel):
     ad: str
-    stok: str = "GY3.31.318"
+    stok: str = DEFAULT_STOK_KODU
+    stok_secim_gerekli: bool = False
     kdv_oran: int | None = None
     toplam: float = 0.0
     kdv: float = 0.0
     net: float = 0.0
+
+    @model_validator(mode="before")
+    @classmethod
+    def mark_missing_stok(cls, data: object) -> object:
+        if isinstance(data, dict):
+            stok = data.get("stok")
+            if stok is None or (isinstance(stok, str) and not stok.strip()):
+                data = {**data, "stok_secim_gerekli": True}
+        return data
+
+    @field_validator("stok", mode="before")
+    @classmethod
+    def parse_stok(cls, v: object) -> str:
+        if v is None:
+            return DEFAULT_STOK_KODU
+        if isinstance(v, str):
+            stok = v.strip()
+            return stok or DEFAULT_STOK_KODU
+        return str(v)
 
     @field_validator("kdv_oran", mode="before")
     @classmethod
