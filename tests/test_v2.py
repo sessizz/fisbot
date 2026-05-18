@@ -257,7 +257,6 @@ class WebV2Tests(unittest.TestCase):
                     "grand_total": 110.0,
                     "items": [
                         {
-                            "item_name": "Manuel",
                             "stock_code": "GY3.30.303",
                             "vat_rate": 10,
                             "total_amount": 110.0,

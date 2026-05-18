@@ -44,7 +44,6 @@ class ItemUpdate(BaseModel):
 
 
 class ManualItem(BaseModel):
-    item_name: str | None = None
     stock_code: str
     vat_rate: int
     total_amount: float
@@ -544,7 +543,6 @@ async def manual_entry() -> str:
             <table class="w-full min-w-[880px] text-left text-sm">
               <thead class="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
                 <tr>
-                  <th class="px-3 py-3">Aciklama</th>
                   <th class="px-3 py-3">Stok</th>
                   <th class="px-3 py-3">KDV %</th>
                   <th class="px-3 py-3 text-right">Toplam</th>
@@ -638,7 +636,6 @@ async def manual_entry() -> str:
     function addRow(row = {}) {
       state.rows.push({
         id: crypto.randomUUID(),
-        item_name: row.item_name || "",
         stock_code: row.stock_code || "",
         vat_rate: row.vat_rate ?? 10,
         total_amount: row.total_amount || ""
@@ -651,7 +648,6 @@ async def manual_entry() -> str:
         const calc = calcLine(row);
         return `
           <tr data-row-id="${row.id}">
-            <td class="px-3 py-3"><input name="item_name" value="${esc(row.item_name)}" class="h-10 w-full rounded-md border border-line px-2 text-sm" placeholder="Opsiyonel" /></td>
             <td class="px-3 py-3"><select name="stock_code" class="h-10 w-full rounded-md border border-line px-2 text-sm">${stockOptions(row.stock_code)}</select></td>
             <td class="px-3 py-3">
               <select name="vat_rate" class="h-10 w-24 rounded-md border border-line px-2 text-sm">
@@ -751,7 +747,6 @@ async def manual_entry() -> str:
       }
       state.rows = [];
       addRow({
-        item_name: "Fiş toplamı",
         vat_rate: guessVatRate(total, vat),
         total_amount: fields.targetTotal.value
       });
@@ -838,7 +833,6 @@ async def api_create_manual_receipt(payload: ManualReceiptCreate) -> dict[str, A
         net_amount = item.total_amount / (1 + item.vat_rate / 100)
         vat_amount = item.total_amount - net_amount
         normalized = {
-            "item_name": item.item_name,
             "stock_code": item.stock_code,
             "vat_rate": item.vat_rate,
             "net_amount": round(net_amount, 2),
