@@ -804,6 +804,89 @@ def delete_item(item_id: int) -> dict[str, Any]:
     return get_receipt(receipt_id)
 
 
+def create_manual_receipt(
+    *,
+    receipt_date: str,
+    receipt_no: str,
+    total_vat: float,
+    grand_total: float,
+    items: list[dict[str, Any]],
+) -> dict[str, Any]:
+    init_db()
+    receipt_id = uuid4().hex
+    timestamp = now_iso()
+    with _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO receipts (
+                id,
+                created_at,
+                updated_at,
+                status,
+                image_path,
+                receipt_date,
+                receipt_no,
+                store_name,
+                total_vat,
+                grand_total,
+                warnings_json
+            )
+            VALUES (?, ?, ?, 'ready_to_sync', '', ?, ?, 'Manuel Fiş', ?, ?, '[]')
+            """,
+            (
+                receipt_id,
+                timestamp,
+                timestamp,
+                receipt_date,
+                receipt_no,
+                total_vat,
+                grand_total,
+            ),
+        )
+        for index, item in enumerate(items):
+            stock_code = item["stock_code"]
+            conn.execute(
+                """
+                INSERT INTO receipt_items (
+                    receipt_id,
+                    receipt_group_id,
+                    created_at,
+                    receipt_date,
+                    receipt_no,
+                    store_name,
+                    sort_order,
+                    item_name,
+                    stock_code,
+                    stock_name,
+                    vat_rate,
+                    net_amount,
+                    vat_amount,
+                    total_amount,
+                    needs_review,
+                    needs_stock_review,
+                    sheet_appended
+                )
+                VALUES (?, ?, ?, ?, ?, 'Manuel Fiş', ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0)
+                """,
+                (
+                    receipt_id,
+                    receipt_id,
+                    timestamp,
+                    receipt_date,
+                    receipt_no,
+                    index,
+                    item.get("item_name") or STOK_KODLARI[stock_code],
+                    stock_code,
+                    STOK_KODLARI[stock_code],
+                    item["vat_rate"],
+                    item["net_amount"],
+                    item["vat_amount"],
+                    item["total_amount"],
+                ),
+            )
+    return get_receipt(receipt_id)
+
+
 def get_item(item_id: int) -> dict[str, Any]:
     init_db()
     with _connect() as conn:

@@ -193,6 +193,27 @@ class StoreV2Tests(unittest.TestCase):
         self.assertEqual(updated["total_vat"], 20.0)
         self.assertEqual(len(dashboard_store.receipt_items(record["id"])), 1)
 
+    def test_create_manual_receipt(self):
+        receipt = dashboard_store.create_manual_receipt(
+            receipt_date="02.05.2026",
+            receipt_no="M-1",
+            total_vat=10.0,
+            grand_total=110.0,
+            items=[
+                {
+                    "item_name": "Manuel yemek",
+                    "stock_code": "GY3.30.303",
+                    "vat_rate": 10,
+                    "net_amount": 100.0,
+                    "vat_amount": 10.0,
+                    "total_amount": 110.0,
+                }
+            ],
+        )
+        self.assertEqual(receipt["status"], "ready_to_sync")
+        self.assertEqual(receipt["grand_total"], 110.0)
+        self.assertEqual(dashboard_store.receipt_items(receipt["id"])[0]["stock_code"], "GY3.30.303")
+
 
 class WebV2Tests(unittest.TestCase):
     def setUp(self):
@@ -211,6 +232,40 @@ class WebV2Tests(unittest.TestCase):
         self.assertEqual(client.get("/health").json(), {"status": "ok"})
         self.assertEqual(client.get("/api/recent").status_code, 200)
         self.assertEqual(client.get("/api/review").status_code, 200)
+
+    def test_manual_page_and_api(self):
+        import fisbot.web as web
+        from fisbot.web import app
+
+        async def fake_sync(receipt_id: str):
+            return dashboard_store.mark_receipt_synced(receipt_id)
+
+        original_sync = web.sync_receipt_if_ready
+        web.sync_receipt_if_ready = fake_sync
+        try:
+            client = TestClient(app)
+            self.assertIn("Fis giris", client.get("/manual").text)
+            response = client.post(
+                "/api/manual-receipts",
+                json={
+                    "receipt_date": "03.05.2026",
+                    "receipt_no": "M-2",
+                    "total_vat": 10.0,
+                    "grand_total": 110.0,
+                    "items": [
+                        {
+                            "item_name": "Manuel",
+                            "stock_code": "GY3.30.303",
+                            "vat_rate": 10,
+                            "total_amount": 110.0,
+                        }
+                    ],
+                },
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["receipt"]["status"], "synced")
+        finally:
+            web.sync_receipt_if_ready = original_sync
 
 
 if __name__ == "__main__":
