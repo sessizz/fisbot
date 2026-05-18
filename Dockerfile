@@ -2,7 +2,8 @@ FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    DATA_DIR=/app/data
+    DATA_DIR=/app/data \
+    PORT=3000
 
 WORKDIR /app
 
@@ -21,5 +22,7 @@ RUN mkdir -p /app/data \
 USER fisbot
 
 VOLUME ["/app/data"]
+
+EXPOSE 3000
 
 CMD ["fisbot"]

@@ -6,6 +6,8 @@ from telegram.constants import ChatAction
 from telegram.ext import ContextTypes
 
 from fisbot.config import ALLOWED_USERS
+from fisbot.dashboard_events import publish_event
+from fisbot.dashboard_store import add_receipt_items
 from fisbot.image_utils import preprocess_image
 from fisbot.gemini_client import extract_receipt, queue_position_info
 from fisbot.parser import ReceiptData, STOK_KODLARI, parse_receipt_response
@@ -57,6 +59,10 @@ def format_telegram_summary(receipt: ReceiptData) -> str:
     return "\n".join(lines)
 
 
+async def publish_status(title: str, message: str) -> None:
+    await publish_event({"type": "status", "title": title, "message": message})
+
+
 async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /start command."""
     if update.effective_user and not is_user_allowed(update.effective_user.id):
@@ -104,6 +110,9 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text("Bu botu kullanma yetkiniz yok.")
         return
 
+    user_label = user.full_name if user else "Bilinmeyen kullanici"
+    await publish_status("Fis geldi", f"{user_label} Telegram'dan fotograf gonderdi.")
+
     # Send processing indicator
     status_msg = await update.message.reply_text("⏳ Fiş işleniyor, lütfen bekleyin...")
     await context.bot.send_chat_action(
@@ -117,6 +126,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         file = await context.bot.get_file(photo.file_id)
         image_bytes = await file.download_as_bytearray()
 
+        await publish_status("Gorsel hazirlaniyor", "Fis fotografi indirildi ve isleniyor.")
+
         # Preprocess image
         image_bytes = preprocess_image(bytes(image_bytes))
 
@@ -129,10 +140,16 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         # Check queue status and inform user
         slots, wait = queue_position_info()
         if slots == 0:
+            await publish_status(
+                "Sirada bekliyor",
+                f"Gemini istek limiti dolu. Yaklasik {int(wait)} saniye beklenecek.",
+            )
             await status_msg.edit_text(
                 f"⏳ Dakikalık istek limiti doldu, sırada bekleniyor... "
                 f"(yaklaşık {int(wait)} saniye)"
             )
+
+        await publish_status("Gemini isliyor", "Fis Gemini modeline gonderildi.")
 
         # Send to Gemini (rate-limited, always with multi-receipt support)
         raw_response = await extract_receipt(
@@ -140,6 +157,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
 
         # Update status
+        await publish_status("Analiz ediliyor", "Model yaniti yapisal veriye cevriliyor.")
         await status_msg.edit_text("⏳ Fiş analiz ediliyor...")
 
         # Parse response
@@ -148,6 +166,12 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         # Save and respond for each receipt
         for receipt in receipts:
             filepath = save_receipt(receipt)
+            dashboard_rows = await asyncio.to_thread(add_receipt_items, receipt)
+            await publish_event({"type": "receipt_rows", "rows": dashboard_rows})
+            await publish_status(
+                "Fis kaydedildi",
+                f"{receipt.fis_no or 'Fis no yok'} icin {len(dashboard_rows)} kalem eklendi.",
+            )
 
             # Append to Google Sheets
             try:
@@ -167,11 +191,13 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     except ValueError as e:
         logger.error("Parse error: %s", e)
+        await publish_status("Fis okunamadi", str(e))
         await status_msg.edit_text(
             f"❌ Fiş okunamadı: {e}\n\nLütfen daha net bir fotoğraf göndermeyi deneyin."
         )
     except Exception:
         logger.exception("Unexpected error processing receipt")
+        await publish_status("Hata", "Fis islenirken beklenmeyen bir hata olustu.")
         await status_msg.edit_text(
             "❌ Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin."
         )

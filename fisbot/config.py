@@ -29,6 +29,10 @@ ALLOWED_USERS: list[int] = [int(uid.strip()) for uid in _allowed.split(",") if u
 
 MAX_IMAGE_DIMENSION: int = 2048
 
+# Web dashboard
+WEB_HOST: str = os.getenv("WEB_HOST", "0.0.0.0")
+WEB_PORT: int = int(os.getenv("PORT", os.getenv("WEB_PORT", "3000")))
+
 # Google Sheets
 GOOGLE_SHEETS_CREDENTIALS_PATH: Path = Path(
     os.getenv(

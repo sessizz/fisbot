@@ -7,10 +7,10 @@ Bu repo Coolify'da Dockerfile ile deploy edilecek şekilde paketlendi.
 1. Coolify'da yeni bir **Application** oluşturun.
 2. Kaynak olarak bu Git reposunu seçin.
 3. Build Pack / Deployment Type olarak **Dockerfile** seçin.
-4. Port expose etmeyin. Bu bot Telegram polling ile çalışır, HTTP server açmaz.
+4. Public port olarak `3000` kullanın. Bot Telegram polling ile çalışır, aynı process içinde web paneli de açar.
 5. Persistent storage ekleyin:
    - Container path: `/app/data`
-   - Bu klasöre işlenen fişlerin Markdown çıktıları yazılır.
+   - Bu klasöre işlenen fişlerin Markdown çıktıları ve panelin SQLite veritabanı yazılır.
 
 ## Environment variables
 
@@ -29,6 +29,7 @@ GOOGLE_SHEETS_CREDENTIALS_JSON={"type":"service_account",...}
 GEMINI_MODELS=gemini-2.5-flash-lite,gemini-2.5-flash
 ALLOWED_USERS=123456789,987654321
 DATA_DIR=/app/data
+PORT=3000
 ```
 
 `ALLOWED_USERS` boş kalırsa bot herkese açıktır. Production'da Telegram kullanıcı ID'lerini virgülle ayırarak vermek daha güvenlidir.
@@ -49,7 +50,7 @@ Service account e-posta adresine hedef Google Sheet üzerinde edit yetkisi verme
 
 ```bash
 docker build -t fisbot .
-docker run --rm --env-file .env -v "$(pwd)/data:/app/data" fisbot
+docker run --rm --env-file .env -p 3000:3000 -v "$(pwd)/data:/app/data" fisbot
 ```
 
-Bot başlarken Telegram token ve Gemini API bağlantısını kontrol eder. Eksik veya hatalı secret varsa container hata vererek durur.
+Bot başlarken Telegram token ve Gemini API bağlantısını kontrol eder. Eksik veya hatalı secret varsa container hata vererek durur. Web paneli `http://localhost:3000` adresindedir.
