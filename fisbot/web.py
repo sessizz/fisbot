@@ -507,8 +507,7 @@ async def manual_entry() -> str:
       <button id="saveReceipt" class="h-11 rounded-md bg-leaf px-5 text-sm font-semibold text-white" type="button">Kaydet ve Sheets'e yaz</button>
     </header>
 
-    <section class="grid gap-4 py-5 lg:grid-cols-[minmax(0,1fr)_300px]">
-      <section class="space-y-4">
+    <section class="space-y-4 py-5">
         <section class="rounded-lg border border-line bg-white p-4 shadow-sm">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 class="text-base font-semibold">Fis bilgileri</h2>
@@ -534,42 +533,41 @@ async def manual_entry() -> str:
           </div>
         </section>
 
+        <section class="rounded-lg border border-line bg-white p-4 shadow-sm">
+          <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <h2 class="text-base font-semibold">Kontrol</h2>
+            <dl class="grid flex-1 grid-cols-2 gap-3 text-sm sm:grid-cols-4 lg:max-w-3xl">
+              <div class="rounded-md bg-zinc-50 p-3"><dt class="text-xs text-zinc-500">Girilen toplam</dt><dd id="enteredTotal" class="mt-1 font-semibold">0,00</dd></div>
+              <div class="rounded-md bg-zinc-50 p-3"><dt class="text-xs text-zinc-500">Kalan toplam</dt><dd id="remainingTotal" class="mt-1 font-semibold">0,00</dd></div>
+              <div class="rounded-md bg-zinc-50 p-3"><dt class="text-xs text-zinc-500">Girilen KDV</dt><dd id="enteredVat" class="mt-1 font-semibold">0,00</dd></div>
+              <div class="rounded-md bg-zinc-50 p-3"><dt class="text-xs text-zinc-500">Kalan KDV</dt><dd id="remainingVat" class="mt-1 font-semibold">0,00</dd></div>
+            </dl>
+          </div>
+          <div id="readyBox" class="mt-4 rounded-md bg-amber-50 p-3 text-sm text-amber-800">Fis henuz tamamlanmadi.</div>
+        </section>
+
         <section class="rounded-lg border border-line bg-white shadow-sm">
           <div class="flex items-center justify-between border-b border-line p-4">
             <h2 class="text-base font-semibold">Kalemler</h2>
             <button id="addRow" class="rounded-md border border-line px-3 py-2 text-sm font-semibold hover:bg-zinc-50" type="button">Satir ekle</button>
           </div>
           <div class="overflow-x-auto">
-            <table class="w-full min-w-[880px] text-left text-sm">
+            <table class="w-full min-w-[680px] table-fixed text-left text-sm">
               <thead class="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
                 <tr>
                   <th class="px-3 py-3">Stok</th>
-                  <th class="px-3 py-3">KDV %</th>
-                  <th class="px-3 py-3 text-right">Toplam</th>
-                  <th class="px-3 py-3 text-right">Net</th>
-                  <th class="px-3 py-3 text-right">KDV</th>
-                  <th class="px-3 py-3"></th>
+                  <th class="w-[100px] px-3 py-3">KDV %</th>
+                  <th class="w-[128px] px-3 py-3 text-right">Toplam</th>
+                  <th class="w-[110px] px-3 py-3 text-right">Net</th>
+                  <th class="w-[110px] px-3 py-3 text-right">KDV</th>
+                  <th class="w-[76px] px-3 py-3"></th>
                 </tr>
               </thead>
               <tbody id="manualRows" class="divide-y divide-line"></tbody>
             </table>
           </div>
         </section>
-      </section>
-
-      <aside class="space-y-4">
-        <section class="rounded-lg border border-line bg-white p-4 shadow-sm">
-          <h2 class="text-base font-semibold">Kontrol</h2>
-          <dl class="mt-4 space-y-3 text-sm">
-            <div class="flex justify-between gap-3"><dt class="text-zinc-500">Girilen toplam</dt><dd id="enteredTotal" class="font-semibold">0,00</dd></div>
-            <div class="flex justify-between gap-3"><dt class="text-zinc-500">Kalan toplam</dt><dd id="remainingTotal" class="font-semibold">0,00</dd></div>
-            <div class="flex justify-between gap-3"><dt class="text-zinc-500">Girilen KDV</dt><dd id="enteredVat" class="font-semibold">0,00</dd></div>
-            <div class="flex justify-between gap-3"><dt class="text-zinc-500">Kalan KDV</dt><dd id="remainingVat" class="font-semibold">0,00</dd></div>
-          </dl>
-          <div id="readyBox" class="mt-4 rounded-md bg-amber-50 p-3 text-sm text-amber-800">Fis henuz tamamlanmadi.</div>
-        </section>
         <section id="resultBox" class="hidden rounded-lg border border-line bg-white p-4 text-sm shadow-sm"></section>
-      </aside>
     </section>
   </main>
 
@@ -648,16 +646,16 @@ async def manual_entry() -> str:
         const calc = calcLine(row);
         return `
           <tr data-row-id="${row.id}">
-            <td class="px-3 py-3"><select name="stock_code" class="h-10 w-full rounded-md border border-line px-2 text-sm">${stockOptions(row.stock_code)}</select></td>
+            <td class="px-3 py-3"><select name="stock_code" class="h-10 w-full min-w-0 rounded-md border border-line px-2 text-sm">${stockOptions(row.stock_code)}</select></td>
             <td class="px-3 py-3">
-              <select name="vat_rate" class="h-10 w-24 rounded-md border border-line px-2 text-sm">
+              <select name="vat_rate" class="h-10 w-full rounded-md border border-line px-2 text-sm">
                 ${[1,10,20].map((rate) => `<option value="${rate}" ${Number(row.vat_rate) === rate ? "selected" : ""}>%${rate}</option>`).join("")}
               </select>
             </td>
-            <td class="px-3 py-3 text-right"><input name="total_amount" value="${esc(row.total_amount)}" class="h-10 w-28 rounded-md border border-line px-2 text-right text-sm" inputmode="decimal" /></td>
-            <td class="px-3 py-3 text-right font-medium">${fmt(calc.net_amount)}</td>
-            <td class="px-3 py-3 text-right font-medium">${fmt(calc.vat_amount)}</td>
-            <td class="px-3 py-3 text-right"><button class="rounded-md border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50" type="button">Sil</button></td>
+            <td class="px-3 py-3 text-right"><input name="total_amount" value="${esc(row.total_amount)}" class="h-10 w-full rounded-md border border-line px-2 text-right text-sm" inputmode="decimal" /></td>
+            <td class="truncate px-3 py-3 text-right font-medium">${fmt(calc.net_amount)}</td>
+            <td class="truncate px-3 py-3 text-right font-medium">${fmt(calc.vat_amount)}</td>
+            <td class="px-3 py-3 text-right"><button class="w-full rounded-md border border-red-200 px-2 py-2 text-xs font-semibold text-red-700 hover:bg-red-50" type="button">Sil</button></td>
           </tr>
         `;
       }).join("");
