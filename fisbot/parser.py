@@ -2,7 +2,7 @@ import json
 import logging
 import re
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,9 @@ def _guess_kdv_rate(toplam: float, kdv: float, net: float) -> int:
 class ReceiptItem(BaseModel):
     ad: str
     stok: str = DEFAULT_STOK_KODU
+    ad_secim_gerekli: bool = False
     stok_secim_gerekli: bool = False
+    toplam_secim_gerekli: bool = False
     kdv_oran: int | None = None
     toplam: float = 0.0
     kdv: float = 0.0
@@ -52,9 +54,20 @@ class ReceiptItem(BaseModel):
     @classmethod
     def mark_missing_stok(cls, data: object) -> object:
         if isinstance(data, dict):
+            missing: dict[str, bool] = {}
+            ad = data.get("ad")
+            if ad is None or (isinstance(ad, str) and not ad.strip()):
+                missing["ad_secim_gerekli"] = True
             stok = data.get("stok")
             if stok is None or (isinstance(stok, str) and not stok.strip()):
-                data = {**data, "stok_secim_gerekli": True}
+                missing["stok_secim_gerekli"] = True
+            elif isinstance(stok, str) and stok.strip() not in STOK_KODLARI:
+                missing["stok_secim_gerekli"] = True
+            toplam = data.get("toplam")
+            if toplam is None or (isinstance(toplam, str) and not toplam.strip()):
+                missing["toplam_secim_gerekli"] = True
+            if missing:
+                data = {**data, **missing}
         return data
 
     @field_validator("ad", mode="before")
@@ -110,7 +123,10 @@ class ReceiptItem(BaseModel):
 class ReceiptData(BaseModel):
     tarih: str | None = None
     fis_no: str | None = None
-    urunler: list[ReceiptItem] = []
+    urunler: list[ReceiptItem] = Field(default_factory=list)
+    tarih_secim_gerekli: bool = False
+    fis_no_secim_gerekli: bool = False
+    genel_toplam_secim_gerekli: bool = False
 
     # Extra fields — accepted from JSON but not required
     magaza_adi: str | None = None
@@ -119,11 +135,48 @@ class ReceiptData(BaseModel):
     genel_toplam: float = 0.0
     odeme_yontemi: str | None = None
 
-    @field_validator("toplam_kdv", "genel_toplam", mode="before")
+    @model_validator(mode="before")
     @classmethod
-    def parse_totals(cls, v: object) -> float | None:
+    def mark_missing_fields(cls, data: object) -> object:
+        if isinstance(data, dict):
+            missing: dict[str, bool] = {}
+            tarih = data.get("tarih")
+            if tarih is None or (isinstance(tarih, str) and not tarih.strip()):
+                missing["tarih_secim_gerekli"] = True
+            fis_no = data.get("fis_no")
+            if fis_no is None or (isinstance(fis_no, str) and not fis_no.strip()):
+                missing["fis_no_secim_gerekli"] = True
+            genel_toplam = data.get("genel_toplam")
+            if genel_toplam is None or (
+                isinstance(genel_toplam, str) and not genel_toplam.strip()
+            ):
+                missing["genel_toplam_secim_gerekli"] = True
+            if missing:
+                data = {**data, **missing}
+        return data
+
+    @field_validator("tarih", "fis_no", "magaza_adi", "saat", "odeme_yontemi", mode="before")
+    @classmethod
+    def parse_optional_text(cls, v: object) -> str | None:
         if v is None:
             return None
+        text = str(v).strip()
+        return text or None
+
+    @field_validator("toplam_kdv", mode="before")
+    @classmethod
+    def parse_optional_total(cls, v: object) -> float | None:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            return parse_turkish_price(v)
+        return float(v)
+
+    @field_validator("genel_toplam", mode="before")
+    @classmethod
+    def parse_grand_total(cls, v: object) -> float:
+        if v is None:
+            return 0.0
         if isinstance(v, str):
             return parse_turkish_price(v)
         return float(v)
@@ -135,7 +188,12 @@ def parse_turkish_price(text: str) -> float:
     Turkish format: 1.250,50 → 1250.50
     """
     text = text.strip().replace(" ", "").replace("TL", "").replace("₺", "")
-    text = text.replace(".", "").replace(",", ".")
+    if "," in text:
+        text = text.replace(".", "").replace(",", ".")
+    elif "." in text:
+        parts = text.split(".")
+        if len(parts) > 2 or len(parts[-1]) == 3:
+            text = text.replace(".", "")
     try:
         return float(text)
     except ValueError:
@@ -182,6 +240,10 @@ def parse_receipt_response(raw_text: str) -> list[ReceiptData]:
         logger.error("Failed to parse JSON: %s\nRaw text: %s", e, raw_text[:500])
         raise ValueError(f"Model returned invalid JSON: {e}") from e
 
+    if isinstance(data, dict) and isinstance(data.get("receipts"), list):
+        return [ReceiptData.model_validate(item) for item in data["receipts"]]
+    if isinstance(data, dict) and isinstance(data.get("receipt"), dict):
+        return [ReceiptData.model_validate(data["receipt"])]
     if isinstance(data, list):
         return [ReceiptData.model_validate(item) for item in data]
     return [ReceiptData.model_validate(data)]

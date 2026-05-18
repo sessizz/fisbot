@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import json
 import logging
 import re
 import time
@@ -9,7 +10,12 @@ import google.api_core.exceptions
 import google.generativeai as genai
 
 from fisbot.config import GEMINI_API_KEY, GEMINI_MODELS
-from fisbot.prompt import RECEIPT_EXTRACTION_PROMPT, MULTI_RECEIPT_HINT
+from fisbot.parser import ReceiptData, parse_receipt_response
+from fisbot.prompt import (
+    MULTI_RECEIPT_HINT,
+    RECEIPT_EXTRACTION_PROMPT,
+    RECEIPT_VERIFICATION_PROMPT,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -150,3 +156,125 @@ async def extract_receipt(
             logger.warning("Model %s rejected request: %s, trying next...", model_name, e)
 
     raise last_error or RuntimeError("All Gemini models failed")
+
+
+RECEIPT_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "receipts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "tarih": {"type": "string", "nullable": True},
+                    "fis_no": {"type": "string", "nullable": True},
+                    "magaza_adi": {"type": "string", "nullable": True},
+                    "saat": {"type": "string", "nullable": True},
+                    "toplam_kdv": {"type": "number", "nullable": True},
+                    "genel_toplam": {"type": "number", "nullable": True},
+                    "odeme_yontemi": {"type": "string", "nullable": True},
+                    "urunler": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "ad": {"type": "string", "nullable": True},
+                                "stok": {"type": "string", "nullable": True},
+                                "kdv_oran": {"type": "integer", "nullable": True},
+                                "toplam": {"type": "number", "nullable": True},
+                                "kdv": {"type": "number", "nullable": True},
+                                "net": {"type": "number", "nullable": True},
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        "warnings": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+}
+
+
+def _image_part(image_bytes: bytes) -> dict[str, str]:
+    b64_image = base64.b64encode(image_bytes).decode("utf-8")
+    return {"mime_type": "image/jpeg", "data": b64_image}
+
+
+async def _generate_structured_json(
+    prompt: str,
+    image_bytes: bytes,
+    *,
+    extra_text: str | None = None,
+) -> dict:
+    last_error = None
+    image_part = _image_part(image_bytes)
+
+    async with _queue_lock:
+        await _wait_for_slot()
+
+    for model_name in GEMINI_MODELS:
+        model = _get_model(model_name)
+        logger.info("Trying structured model: %s", model_name)
+        try:
+            parts: list[object] = [prompt]
+            if extra_text:
+                parts.append(extra_text)
+            parts.append(image_part)
+            response = await asyncio.to_thread(
+                model.generate_content,
+                parts,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.0,
+                    max_output_tokens=16384,
+                    response_mime_type="application/json",
+                    response_schema=RECEIPT_RESPONSE_SCHEMA,
+                ),
+            )
+            content = response.text
+            logger.info(
+                "Structured Gemini [%s] response length: %d chars",
+                model_name,
+                len(content),
+            )
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError:
+                receipts = parse_receipt_response(content)
+                return {
+                    "receipts": [receipt.model_dump() for receipt in receipts],
+                    "warnings": ["Model JSON response required cleanup"],
+                }
+        except google.api_core.exceptions.ResourceExhausted as e:
+            last_error = e
+            logger.warning("%s quota exhausted, trying next model...", model_name)
+        except google.api_core.exceptions.NotFound as e:
+            last_error = e
+            logger.warning("Model %s not available, trying next...", model_name)
+        except google.api_core.exceptions.InvalidArgument as e:
+            last_error = e
+            logger.warning("Model %s rejected structured request: %s", model_name, e)
+
+    raise last_error or RuntimeError("All Gemini models failed")
+
+
+async def extract_receipts_json(image_bytes: bytes) -> dict:
+    return await _generate_structured_json(RECEIPT_EXTRACTION_PROMPT, image_bytes)
+
+
+async def verify_receipts_json(image_bytes: bytes, extraction: dict) -> dict:
+    return await _generate_structured_json(
+        RECEIPT_VERIFICATION_PROMPT,
+        image_bytes,
+        extra_text="İlk çıkarım JSON'u:\n" + json.dumps(extraction, ensure_ascii=False),
+    )
+
+
+def receipts_from_structured_payload(payload: dict) -> tuple[list[ReceiptData], list[str]]:
+    receipts = parse_receipt_response(json.dumps(payload, ensure_ascii=False))
+    warnings = payload.get("warnings")
+    if not isinstance(warnings, list):
+        warnings = []
+    return receipts, [str(warning) for warning in warnings]

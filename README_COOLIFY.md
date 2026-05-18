@@ -10,7 +10,7 @@ Bu repo Coolify'da Dockerfile ile deploy edilecek şekilde paketlendi.
 4. Public port olarak `3000` kullanın. Bot Telegram polling ile çalışır, aynı process içinde web paneli de açar.
 5. Persistent storage ekleyin:
    - Container path: `/app/data`
-   - Bu klasöre işlenen fişlerin Markdown çıktıları ve panelin SQLite veritabanı yazılır.
+   - Bu klasöre fiş görselleri, SQLite veritabanı ve işlem geçmişi yazılır.
 
 ## Environment variables
 
@@ -53,4 +53,4 @@ docker build -t fisbot .
 docker run --rm --env-file .env -p 3000:3000 -v "$(pwd)/data:/app/data" fisbot
 ```
 
-Bot başlarken Telegram token ve Gemini API bağlantısını kontrol eder. Eksik veya hatalı secret varsa container hata vererek durur. Web paneli `http://localhost:3000` adresindedir.
+Bot başlarken Telegram token ve Gemini API bağlantısını kontrol eder. Eksik veya hatalı secret varsa container hata vererek durur. Web paneli `http://localhost:3000` adresindedir ve şifresizdir.

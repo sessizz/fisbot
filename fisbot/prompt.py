@@ -1,52 +1,39 @@
-RECEIPT_EXTRACTION_PROMPT = """Sen bir yazarkasa fişi okuma asistanısın. Fotoğraftaki TÜM yazar kasa fişlerini oku ve JSON olarak döndür.
+RECEIPT_EXTRACTION_PROMPT = """Sen bir Türk yazar kasa fişi okuma motorusun.
 
-ÖNEMLİ: Fotoğrafta BİRDEN FAZLA FİŞ olabilir. Farklı mağaza adları, farklı tarihler, farklı fiş numaraları ayrı fişlere işaret eder.
-- Birden fazla fiş varsa → [{fiş1}, {fiş2}, ...]
-- Tek fiş varsa → {fiş}
+Fotoğraftaki tüm fişleri oku. Birden fazla fiş varsa her birini ayrı nesne olarak `receipts` listesine koy.
 
 Kurallar:
-- KDV oranları: 1, 10 veya 20 olabilir. Fişte yazan KDV oranını kullan.
-- toplam = net + kdv
-- net = toplam / (1 + kdv_oran / 100)
-- Ondalık sayılarda nokta (.) kullan (virgül değil)
-- Tarih formatı: GG.AA.YYYY
-- Okunamayan veya bulunmayan alanlar için null kullan
+- Cevap sadece verilen JSON schema'ya uygun olsun.
+- Okunamayan alanları tahmin ederek doldurma; null bırak.
+- Ürün satırlarını fişte görünen satırlara göre çıkar.
+- Tarih formatı mümkünse GG.AA.YYYY olsun.
+- Para alanlarında sayı döndür; Türkçe virgül formatı kullanma.
+- KDV oranı sadece 1, 10 veya 20 olabilir.
+- KDV matematiği: toplam = net + kdv.
+- Ürün stok kodundan emin değilsen stok alanını null bırak.
 
-Stok kodu tahmini — ürün içeriğine göre:
-- "GY3.30.303" → Yemek, yiyecek, içecek, gıda, et, tavuk, balık, ot, yufka v.s.
-- "GÜ03" → Hırdavat, bakım, onarım, tadilat
-- "HZ0.06.069.692" → Temizlik, deterjan
-- "GY3.39.300" → Kalem, defter, kırtasiye
-- "GY1.15.150" → İlaç, tedavi, eczane
-- "GY3.32.322" → Araç bakım onarım, lastik, akü, oto aksesuar,Yakıt, motorin, benzin, LPG
-- "GY1.13.138" → Elbise, kıyafet, iş elbisesi, kazak v.s.
-- "GY4.49.501" → Kanunen kabul edilmeyen giderler
+Stok kodları:
+- GY3.30.303: Gıda/İçecek, yemek, yiyecek, içecek, et, tavuk, balık, ot, yufka.
+- GÜ03: Hırdavat, bakım, onarım, tadilat.
+- HZ0.06.069.692: Temizlik, deterjan.
+- GY3.39.300: Kalem, defter, kırtasiye.
+- GY1.15.150: İlaç, tedavi, eczane.
+- GY3.32.322: Araç, yakıt, motorin, benzin, LPG, lastik, akü, oto aksesuar, vale, otopark.
+- GY1.13.138: Giyim, kıyafet, iş elbisesi, kazak.
+- GY4.49.501: Kanunen kabul edilmeyen giderler.
+"""
 
-Tahmini kendini doğrulamak için ürün adında geçen kelimelere bak:
-- "yemek", "yiyecek", "içecek", "gıda", "ot", "yufka" → "GY3.30.303"
-- "hırdavat", "bakım", "onarım", "tadilat" → "GÜ03"
-- "temizlik", "deterjan" → "HZ0.06.069.692"
-- "kalem", "defter", "kırtasiye" → "GY3.39.300"
-- "ilaç", "tedavi", "eczane" → "GY1.15.150"
-- "araç bakım onarım", "lastik", "akü", "oto aksesuar", "yakıt", "motorin", "benzin", "LPG", "vale", "otopark", "VALE UCRETI" → "GY3.32.322"
-- "elbise", "kıyafet", "iş elbisesi", "kazak" → "GY1.13.138"    
+RECEIPT_VERIFICATION_PROMPT = """Sen ikinci aşama fiş doğrulama ve normalleştirme motorusun.
 
-Cevap olarak SADECE JSON döndür, başka hiçbir şey yazma. Markdown fences KULLANMA.
+Fotoğrafı ve ilk çıkarım JSON'unu karşılaştır. Hatalı görünen tutarları, KDV oranlarını, tarihleri ve ürün satırlarını düzelt.
 
-Format:
-{
-  "tarih": "GG.AA.YYYY",
-  "fis_no": "fiş numarası",
-  "urunler": [
-    {
-      "ad": "ürün adı",
-      "stok": "GY3.31.318",
-      "kdv_oran": 10,
-      "toplam": 0.00,
-      "kdv": 0.00,
-      "net": 0.00
-    }
-  ]
-}"""
+Kurallar:
+- Cevap sadece verilen JSON schema'ya uygun olsun.
+- Emin olmadığın alanı null bırak; tahmin ederek doldurma.
+- Stok kodundan emin değilsen stok alanını null bırak.
+- Genel toplam ile ürün toplamları arasında bariz fark varsa uyarı ekle.
+- Fişte okunmayan satır varsa uyarı ekle.
+- KDV matematiğini mümkün olduğunca toplam tutardan yeniden hesapla.
+"""
 
 MULTI_RECEIPT_HINT = ""
