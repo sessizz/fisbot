@@ -597,10 +597,14 @@ async def manual_entry() -> str:
       }[char]));
     }
 
-    function numberValue(value) {
+    function parseAmountTerm(value) {
       const clean = String(value ?? "").trim().split(".").join("").replace(",", ".");
       const parsed = Number(clean);
-      return Number.isFinite(parsed) ? parsed : 0;
+      return clean && Number.isFinite(parsed) ? parsed : null;
+    }
+
+    function numberValue(value) {
+      return parseAmountTerm(value) ?? 0;
     }
 
     function fmt(value) {
@@ -613,6 +617,23 @@ async def manual_entry() -> str:
 
     function amountInputValue(value) {
       return fmt(roundMoney(value));
+    }
+
+    function amountEntryValue(value) {
+      const rounded = roundMoney(value);
+      return Number.isInteger(rounded) ? String(rounded) : fmt(rounded);
+    }
+
+    function sumAmountExpression(value) {
+      const text = String(value ?? "").trim();
+      if (!text.includes("+")) return null;
+      const parts = text.split("+").map((part) => part.trim());
+      if (parts.some((part) => !part)) return null;
+      const total = parts.reduce((sum, part) => {
+        const parsed = parseAmountTerm(part);
+        return parsed === null ? Number.NaN : sum + parsed;
+      }, 0);
+      return Number.isFinite(total) ? total : null;
     }
 
     function formatDateInput(value) {
@@ -759,6 +780,20 @@ async def manual_entry() -> str:
       const rowEl = button.closest("tr[data-row-id]");
       state.rows = state.rows.filter((row) => row.id !== rowEl.dataset.rowId);
       render();
+    });
+    rowsEl.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || event.target.name !== "total_amount") return;
+      const total = sumAmountExpression(event.target.value);
+      if (total === null) return;
+      event.preventDefault();
+      const rowEl = event.target.closest("tr[data-row-id]");
+      const row = state.rows.find((item) => item.id === rowEl.dataset.rowId);
+      row.total_amount = amountEntryValue(total);
+      render();
+      requestAnimationFrame(() => {
+        const input = rowsEl.querySelector(`tr[data-row-id="${row.id}"] input[name="total_amount"]`);
+        if (input) input.focus();
+      });
     });
     Object.values(fields).forEach((field) => field.addEventListener("input", renderSummary));
     fuelMode.addEventListener("change", renderSummary);
