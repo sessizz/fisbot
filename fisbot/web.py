@@ -954,9 +954,14 @@ async def manual_entry() -> str:
           return;
         }
         const detail = await response.json();
-        resultBox.className = "rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 shadow-sm";
-        resultBox.innerHTML = `Kaydedildi ve Sheets'e gonderildi. <a class="font-semibold underline" href="/#${detail.receipt.id}">Panelde ac</a>`;
-        resetManualForm();
+        if (detail.receipt.status === "sync_failed") {
+          resultBox.className = "rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 shadow-sm";
+          resultBox.innerHTML = `Fis kaydedildi ama Sheets'e yazilamadi. ${esc(detail.receipt.sheet_error || "")} <a class="font-semibold underline" href="/#${detail.receipt.id}">Panelde ac</a>`;
+        } else {
+          resultBox.className = "rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 shadow-sm";
+          resultBox.innerHTML = `Kaydedildi ve Sheets'e gonderildi. <a class="font-semibold underline" href="/#${detail.receipt.id}">Panelde ac</a>`;
+          resetManualForm();
+        }
       } finally {
         state.saving = false;
         saveButton.disabled = false;

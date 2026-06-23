@@ -427,6 +427,45 @@ class WebV2Tests(unittest.TestCase):
         finally:
             web.sync_receipt_if_ready = original_sync
 
+    def test_manual_page_reports_sync_failed_without_losing_receipt(self):
+        import fisbot.web as web
+        from fisbot.web import app
+
+        async def fake_sync(receipt_id: str):
+            return dashboard_store.mark_receipt_sync_failed(
+                receipt_id,
+                "Google Sheets baglantisi kurulamadi.",
+            )
+
+        original_sync = web.sync_receipt_if_ready
+        web.sync_receipt_if_ready = fake_sync
+        try:
+            client = TestClient(app)
+            manual_html = client.get("/manual").text
+            self.assertIn('detail.receipt.status === "sync_failed"', manual_html)
+            response = client.post(
+                "/api/manual-receipts",
+                json={
+                    "receipt_date": "05.05.2026",
+                    "receipt_no": "NET-1",
+                    "total_vat": 10.0,
+                    "grand_total": 110.0,
+                    "items": [
+                        {
+                            "stock_code": "GY3.30.303",
+                            "vat_rate": 10,
+                            "total_amount": 110.0,
+                        }
+                    ],
+                },
+            )
+            self.assertEqual(response.status_code, 200)
+            receipt = response.json()["receipt"]
+            self.assertEqual(receipt["status"], "sync_failed")
+            self.assertIn("Google Sheets baglantisi", receipt["sheet_error"])
+        finally:
+            web.sync_receipt_if_ready = original_sync
+
 
 if __name__ == "__main__":
     unittest.main()

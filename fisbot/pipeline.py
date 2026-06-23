@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from pathlib import Path
 from typing import Awaitable, Callable
 from uuid import uuid4
@@ -27,6 +28,28 @@ from fisbot.parser import ReceiptData
 from fisbot.sheets import append_dashboard_rows_to_sheet
 
 StatusCallback = Callable[[str], Awaitable[None]]
+logger = logging.getLogger(__name__)
+
+SHEETS_CONNECTION_ERROR = (
+    "Google Sheets baglantisi kurulamadi. Fis kaydedildi; internet/DNS/firewall "
+    "duzelince panelden Sheets retry ile tekrar deneyin."
+)
+
+
+def _user_friendly_sync_error(exc: Exception) -> str:
+    error = str(exc)
+    network_markers = (
+        "Network is unreachable",
+        "Failed to establish a new connection",
+        "Max retries exceeded",
+        "NameResolutionError",
+        "Connection refused",
+        "timed out",
+        "Temporary failure in name resolution",
+    )
+    if any(marker in error for marker in network_markers):
+        return SHEETS_CONNECTION_ERROR
+    return error
 
 
 def save_upload_image(image_bytes: bytes) -> Path:
@@ -78,10 +101,14 @@ async def sync_receipt_if_ready(receipt_id: str) -> dict:
     try:
         row_count = await asyncio.to_thread(append_dashboard_rows_to_sheet, rows)
     except Exception as exc:
-        receipt = await asyncio.to_thread(mark_receipt_sync_failed, receipt_id, str(exc))
+        logger.exception("Google Sheets sync failed for receipt %s", receipt_id)
+        error_message = _user_friendly_sync_error(exc)
+        receipt = await asyncio.to_thread(
+            mark_receipt_sync_failed, receipt_id, error_message
+        )
         await emit_status(
             "Sheets hatasi",
-            "Google Sheets'e yazilamadi; panelden tekrar denenebilir.",
+            error_message,
             receipt_id=receipt_id,
             level="error",
         )
