@@ -60,6 +60,38 @@ class ParserV2Tests(unittest.TestCase):
         self.assertEqual(parse_turkish_price("1.250,50"), 1250.50)
         self.assertEqual(parse_turkish_price("1250.50"), 1250.50)
 
+    def test_stock_category_names_are_normalized_to_codes(self):
+        receipt = parse_receipt_response(
+            """
+            {
+              "urunler": [
+                {
+                  "ad": "TAVUK",
+                  "stok": "Gıda/İçecek",
+                  "kdv_oran": 10,
+                  "toplam": 110,
+                  "kdv": 10,
+                  "net": 100
+                },
+                {
+                  "ad": "MOTORIN",
+                  "stok": "yakıt",
+                  "kdv_oran": 20,
+                  "toplam": 120,
+                  "kdv": 20,
+                  "net": 100
+                }
+              ],
+              "genel_toplam": 230
+            }
+            """
+        )[0]
+
+        self.assertEqual(receipt.urunler[0].stok, "GY3.30.303")
+        self.assertFalse(receipt.urunler[0].stok_secim_gerekli)
+        self.assertEqual(receipt.urunler[1].stok, "GY3.32.322")
+        self.assertFalse(receipt.urunler[1].stok_secim_gerekli)
+
 
 class StoreV2Tests(unittest.TestCase):
     def setUp(self):

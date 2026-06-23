@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import unicodedata
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -24,6 +25,88 @@ STOK_KODLARI = {
 
 
 VALID_KDV_RATES = [1, 10, 20]
+
+STOK_ALIASES = {
+    "gida": "GY3.30.303",
+    "gida icecek": "GY3.30.303",
+    "yemek": "GY3.30.303",
+    "yiyecek": "GY3.30.303",
+    "icecek": "GY3.30.303",
+    "et": "GY3.30.303",
+    "tavuk": "GY3.30.303",
+    "balik": "GY3.30.303",
+    "yufka": "GY3.30.303",
+    "bakim": "GÜ03",
+    "onarim": "GÜ03",
+    "hirdavat": "GÜ03",
+    "tadilat": "GÜ03",
+    "temizlik": "HZ0.06.069.692",
+    "deterjan": "HZ0.06.069.692",
+    "kirtasiye": "GY3.39.300",
+    "kalem": "GY3.39.300",
+    "defter": "GY3.39.300",
+    "ilac": "GY1.15.150",
+    "tedavi": "GY1.15.150",
+    "eczane": "GY1.15.150",
+    "arac": "GY3.32.322",
+    "yakit": "GY3.32.322",
+    "motorin": "GY3.32.322",
+    "benzin": "GY3.32.322",
+    "lpg": "GY3.32.322",
+    "lastik": "GY3.32.322",
+    "aku": "GY3.32.322",
+    "oto aksesuar": "GY3.32.322",
+    "vale": "GY3.32.322",
+    "otopark": "GY3.32.322",
+    "giyim": "GY1.13.138",
+    "kiyafet": "GY1.13.138",
+    "is elbisesi": "GY1.13.138",
+    "kazak": "GY1.13.138",
+    "kkeg": "GY4.49.501",
+    "kanunen kabul edilmeyen gider": "GY4.49.501",
+}
+
+
+def _normalize_stock_text(value: str) -> str:
+    text = unicodedata.normalize("NFKD", value.strip().lower())
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    replacements = str.maketrans({
+        "ç": "c",
+        "ğ": "g",
+        "ı": "i",
+        "ö": "o",
+        "ş": "s",
+        "ü": "u",
+    })
+    text = text.translate(replacements)
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def normalize_stock_code(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        value = str(value)
+    stock = value.strip()
+    if not stock:
+        return None
+    if stock in STOK_KODLARI:
+        return stock
+
+    upper_stock = stock.upper()
+    for code in STOK_KODLARI:
+        if upper_stock == code.upper():
+            return code
+
+    normalized = _normalize_stock_text(stock)
+    if normalized in STOK_ALIASES:
+        return STOK_ALIASES[normalized]
+
+    for name, code in STOK_ALIASES.items():
+        if name in normalized:
+            return code
+    return None
 
 
 def _guess_kdv_rate(toplam: float, kdv: float, net: float) -> int:
@@ -63,7 +146,7 @@ class ReceiptItem(BaseModel):
             stok = data.get("stok")
             if stok is None or (isinstance(stok, str) and not stok.strip()):
                 missing["stok_secim_gerekli"] = True
-            elif isinstance(stok, str) and stok.strip() not in STOK_KODLARI:
+            elif normalize_stock_code(stok) is None:
                 missing["stok_secim_gerekli"] = True
             toplam = data.get("toplam")
             if toplam is None or (isinstance(toplam, str) and not toplam.strip()):
@@ -85,12 +168,7 @@ class ReceiptItem(BaseModel):
     @field_validator("stok", mode="before")
     @classmethod
     def parse_stok(cls, v: object) -> str:
-        if v is None:
-            return DEFAULT_STOK_KODU
-        if isinstance(v, str):
-            stok = v.strip()
-            return stok or DEFAULT_STOK_KODU
-        return str(v)
+        return normalize_stock_code(v) or DEFAULT_STOK_KODU
 
     @field_validator("kdv_oran", mode="before")
     @classmethod

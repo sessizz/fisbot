@@ -10,7 +10,7 @@ import google.api_core.exceptions
 import google.generativeai as genai
 
 from fisbot.config import GEMINI_API_KEY, GEMINI_MODELS
-from fisbot.parser import ReceiptData, parse_receipt_response
+from fisbot.parser import ReceiptData, STOK_KODLARI, parse_receipt_response
 from fisbot.prompt import (
     MULTI_RECEIPT_HINT,
     RECEIPT_EXTRACTION_PROMPT,
@@ -179,7 +179,11 @@ RECEIPT_RESPONSE_SCHEMA = {
                             "type": "object",
                             "properties": {
                                 "ad": {"type": "string", "nullable": True},
-                                "stok": {"type": "string", "nullable": True},
+                                "stok": {
+                                    "type": "string",
+                                    "nullable": True,
+                                    "enum": list(STOK_KODLARI.keys()),
+                                },
                                 "kdv_oran": {"type": "integer", "nullable": True},
                                 "toplam": {"type": "number", "nullable": True},
                                 "kdv": {"type": "number", "nullable": True},

@@ -1,4 +1,15 @@
-RECEIPT_EXTRACTION_PROMPT = """Sen bir Türk yazar kasa fişi okuma motorusun.
+STOCK_CODE_GUIDE = """Stok kodları:
+- GY3.30.303: Gıda/İçecek, yemek, yiyecek, içecek, et, tavuk, balık, ot, yufka.
+- GÜ03: Hırdavat, bakım, onarım, tadilat.
+- HZ0.06.069.692: Temizlik, deterjan.
+- GY3.39.300: Kalem, defter, kırtasiye.
+- GY1.15.150: İlaç, tedavi, eczane.
+- GY3.32.322: Araç, yakıt, motorin, benzin, LPG, lastik, akü, oto aksesuar, vale, otopark.
+- GY1.13.138: Giyim, kıyafet, iş elbisesi, kazak.
+- GY4.49.501: Kanunen kabul edilmeyen giderler."""
+
+
+RECEIPT_EXTRACTION_PROMPT = f"""Sen bir Türk yazar kasa fişi okuma motorusun.
 
 Fotoğraftaki tüm fişleri oku. Birden fazla fiş varsa her birini ayrı nesne olarak `receipts` listesine koy.
 
@@ -12,18 +23,10 @@ Kurallar:
 - KDV matematiği: toplam = net + kdv.
 - Ürün stok kodundan emin değilsen stok alanını null bırak.
 
-Stok kodları:
-- GY3.30.303: Gıda/İçecek, yemek, yiyecek, içecek, et, tavuk, balık, ot, yufka.
-- GÜ03: Hırdavat, bakım, onarım, tadilat.
-- HZ0.06.069.692: Temizlik, deterjan.
-- GY3.39.300: Kalem, defter, kırtasiye.
-- GY1.15.150: İlaç, tedavi, eczane.
-- GY3.32.322: Araç, yakıt, motorin, benzin, LPG, lastik, akü, oto aksesuar, vale, otopark.
-- GY1.13.138: Giyim, kıyafet, iş elbisesi, kazak.
-- GY4.49.501: Kanunen kabul edilmeyen giderler.
+{STOCK_CODE_GUIDE}
 """
 
-RECEIPT_VERIFICATION_PROMPT = """Sen ikinci aşama fiş doğrulama ve normalleştirme motorusun.
+RECEIPT_VERIFICATION_PROMPT = f"""Sen ikinci aşama fiş doğrulama ve normalleştirme motorusun.
 
 Fotoğrafı ve ilk çıkarım JSON'unu karşılaştır. Hatalı görünen tutarları, KDV oranlarını, tarihleri ve ürün satırlarını düzelt.
 
@@ -34,6 +37,8 @@ Kurallar:
 - Genel toplam ile ürün toplamları arasında bariz fark varsa uyarı ekle.
 - Fişte okunmayan satır varsa uyarı ekle.
 - KDV matematiğini mümkün olduğunca toplam tutardan yeniden hesapla.
+
+{STOCK_CODE_GUIDE}
 """
 
 MULTI_RECEIPT_HINT = ""
