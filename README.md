@@ -176,7 +176,7 @@ Klavye kisa yollari:
 - `Alt + K`: Manuel fisi kaydet ve Google Sheets'e yaz.
 - Ust bilgi alanlarinda `Enter`: Sonraki alana gec.
 - Toplam tutar alaninda `Enter`: Girilen toplamdan satir olustur.
-- Kalem tutari alaninda `12,50+7,50` gibi ifade yazip `Enter`: Ifadeyi toplayip satira uygula.
+- Kalem tutari alaninda `12,50+7,50`, `20-5`, `3*4`, `100/4` gibi ifade yazip `Enter` veya `Tab`: Ifadeyi hesaplayip satira uygula.
 
 Benzin modu aciksa sistem toplam tutari proje icindeki ozel stok kodlariyla birden fazla satira dagitir.
 

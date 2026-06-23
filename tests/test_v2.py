@@ -292,6 +292,8 @@ class WebV2Tests(unittest.TestCase):
             self.assertIn("controlTargetVat", manual_html)
             self.assertIn("fuel_mode: fuelMode.checked", manual_html)
             self.assertIn("sumAmountExpression", manual_html)
+            self.assertIn("calculateAmountExpression", manual_html)
+            self.assertIn("applyAmountExpression", manual_html)
             self.assertIn("67899009", manual_html)
             response = client.post(
                 "/api/manual-receipts",

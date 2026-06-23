@@ -691,16 +691,107 @@ async def manual_entry() -> str:
       return Number.isInteger(rounded) ? String(rounded) : fmt(rounded);
     }
 
-    function sumAmountExpression(value) {
+    function tokenizeAmountExpression(value) {
       const text = String(value ?? "").trim();
-      if (!text.includes("+")) return null;
-      const parts = text.split("+").map((part) => part.trim());
-      if (parts.some((part) => !part)) return null;
-      const total = parts.reduce((sum, part) => {
-        const parsed = parseAmountTerm(part);
-        return parsed === null ? Number.NaN : sum + parsed;
-      }, 0);
-      return Number.isFinite(total) ? total : null;
+      if (!/[+*/xX÷()-]/.test(text)) return null;
+      const tokens = [];
+      let index = 0;
+      while (index < text.length) {
+        const char = text[index];
+        if (char.trim() === "") {
+          index += 1;
+          continue;
+        }
+        if ("+-*/xX÷()".includes(char)) {
+          tokens.push(char);
+          index += 1;
+          continue;
+        }
+        if (/[0-9.,]/.test(char)) {
+          let end = index + 1;
+          while (end < text.length && /[0-9.,]/.test(text[end])) {
+            end += 1;
+          }
+          const parsed = parseAmountTerm(text.slice(index, end));
+          if (parsed === null) return null;
+          tokens.push(parsed);
+          index = end;
+          continue;
+        }
+        return null;
+      }
+      return tokens;
+    }
+
+    function calculateAmountExpression(value) {
+      const tokens = tokenizeAmountExpression(value);
+      if (!tokens || tokens.length === 0) return null;
+      let position = 0;
+
+      function peek() {
+        return tokens[position];
+      }
+
+      function take() {
+        const token = tokens[position];
+        position += 1;
+        return token;
+      }
+
+      function parseFactor() {
+        const token = take();
+        if (token === "+") return parseFactor();
+        if (token === "-") return -parseFactor();
+        if (token === "(") {
+          const value = parseExpression();
+          if (take() !== ")") return Number.NaN;
+          return value;
+        }
+        return typeof token === "number" ? token : Number.NaN;
+      }
+
+      function parseTerm() {
+        let value = parseFactor();
+        while (["*", "/", "x", "X", "÷"].includes(peek())) {
+          const operator = take();
+          const right = parseFactor();
+          value = ["*", "x", "X"].includes(operator) ? value * right : value / right;
+        }
+        return value;
+      }
+
+      function parseExpression() {
+        let value = parseTerm();
+        while (["+", "-"].includes(peek())) {
+          const operator = take();
+          const right = parseTerm();
+          value = operator === "+" ? value + right : value - right;
+        }
+        return value;
+      }
+
+      const total = parseExpression();
+      return position === tokens.length && Number.isFinite(total) ? total : null;
+    }
+
+    function sumAmountExpression(value) {
+      return calculateAmountExpression(value);
+    }
+
+    function applyAmountExpression(input, options = {}) {
+      const total = sumAmountExpression(input.value);
+      if (total === null) return false;
+      const rowEl = input.closest("tr[data-row-id]");
+      const row = state.rows.find((item) => item.id === rowEl.dataset.rowId);
+      row.total_amount = amountEntryValue(total);
+      render();
+      if (options.refocus) {
+        requestAnimationFrame(() => {
+          const nextInput = rowsEl.querySelector(`tr[data-row-id="${row.id}"] input[name="total_amount"]`);
+          if (nextInput) nextInput.focus();
+        });
+      }
+      return true;
     }
 
     function formatDateInput(value) {
@@ -839,6 +930,9 @@ async def manual_entry() -> str:
       const rowEl = event.target.closest("tr[data-row-id]");
       const row = state.rows.find((item) => item.id === rowEl.dataset.rowId);
       row[event.target.name] = event.target.value;
+      if (event.target.name === "total_amount" && applyAmountExpression(event.target)) {
+        return;
+      }
       render();
     });
     rowsEl.addEventListener("click", (event) => {
@@ -850,17 +944,8 @@ async def manual_entry() -> str:
     });
     rowsEl.addEventListener("keydown", (event) => {
       if (event.key !== "Enter" || event.target.name !== "total_amount") return;
-      const total = sumAmountExpression(event.target.value);
-      if (total === null) return;
+      if (!applyAmountExpression(event.target, {refocus: true})) return;
       event.preventDefault();
-      const rowEl = event.target.closest("tr[data-row-id]");
-      const row = state.rows.find((item) => item.id === rowEl.dataset.rowId);
-      row.total_amount = amountEntryValue(total);
-      render();
-      requestAnimationFrame(() => {
-        const input = rowsEl.querySelector(`tr[data-row-id="${row.id}"] input[name="total_amount"]`);
-        if (input) input.focus();
-      });
     });
     Object.values(fields).forEach((field) => field.addEventListener("input", renderSummary));
     fuelMode.addEventListener("change", renderSummary);
