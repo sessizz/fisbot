@@ -745,18 +745,30 @@ def update_item_fields(item_id: int, values: dict[str, Any]) -> dict[str, Any]:
     if not updates:
         return get_item(item_id)
 
-    assignments = ", ".join(f"{column} = ?" for column in updates)
-    params = list(updates.values())
-    params.append(item_id)
     timestamp = now_iso()
     with _connect() as conn:
         row = conn.execute(
-            "SELECT receipt_id FROM receipt_items WHERE id = ?",
+            """
+            SELECT receipt_id, vat_rate, total_amount
+            FROM receipt_items
+            WHERE id = ?
+            """,
             (item_id,),
         ).fetchone()
         if row is None:
             raise ValueError("Receipt item not found")
         receipt_id = row["receipt_id"]
+
+        if "total_amount" in updates or "vat_rate" in updates:
+            total_amount = float(updates.get("total_amount", row["total_amount"]) or 0)
+            vat_rate = int(updates.get("vat_rate", row["vat_rate"]) or 0)
+            net_amount = total_amount / (1 + vat_rate / 100) if vat_rate > 0 else total_amount
+            updates["net_amount"] = round(net_amount, 2)
+            updates["vat_amount"] = round(total_amount - net_amount, 2)
+
+        assignments = ", ".join(f"{column} = ?" for column in updates)
+        params = list(updates.values())
+        params.append(item_id)
         conn.execute(
             f"""
             UPDATE receipt_items

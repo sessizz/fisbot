@@ -181,6 +181,27 @@ async def dashboard() -> str:
       return Number.isFinite(parsed) ? parsed : null;
     }
 
+    function roundMoney(value) {
+      return Math.round(Number(value || 0) * 100) / 100;
+    }
+
+    function amountInputValue(value) {
+      const rounded = roundMoney(value);
+      return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2).replace(".", ",");
+    }
+
+    function calculateAmounts(total, vatRate) {
+      const normalizedTotal = roundMoney(total);
+      const rate = Number(vatRate || 0);
+      const net = rate > 0 ? normalizedTotal / (1 + rate / 100) : normalizedTotal;
+      const vat = normalizedTotal - net;
+      return {
+        net_amount: roundMoney(net),
+        vat_amount: roundMoney(vat),
+        total_amount: normalizedTotal
+      };
+    }
+
     function setConnected(connected) {
       connectionDotEl.className = `h-3 w-3 rounded-full ${connected ? "bg-emerald-500" : "bg-zinc-300"}`;
       connectionTextEl.textContent = connected ? "Canli bagli" : "Baglanti bekleniyor";
@@ -328,13 +349,16 @@ async def dashboard() -> str:
     }
 
     function itemRow(item) {
+      const calculated = calculateAmounts(item.total_amount, item.vat_rate);
+      const netAmount = item.total_amount ? calculated.net_amount : item.net_amount;
+      const vatAmount = item.total_amount ? calculated.vat_amount : item.vat_amount;
       return `
         <tr data-item-id="${item.id}">
           <td class="px-3 py-2"><input name="item_name" value="${esc(item.item_name || "")}" class="h-9 w-full rounded border border-line px-2" /></td>
           <td class="px-3 py-2"><select name="stock_code" class="h-9 w-full rounded border border-line px-2">${stockOptions(item.stock_code)}</select></td>
           <td class="px-3 py-2"><input name="vat_rate" value="${esc(item.vat_rate ?? "")}" class="h-9 w-20 rounded border border-line px-2" /></td>
-          <td class="px-3 py-2"><input name="net_amount" value="${esc(item.net_amount ?? "")}" class="h-9 w-24 rounded border border-line px-2" /></td>
-          <td class="px-3 py-2"><input name="vat_amount" value="${esc(item.vat_amount ?? "")}" class="h-9 w-24 rounded border border-line px-2" /></td>
+          <td class="px-3 py-2"><input name="net_amount" value="${esc(netAmount ?? "")}" class="h-9 w-24 rounded border border-line px-2" /></td>
+          <td class="px-3 py-2"><input name="vat_amount" value="${esc(vatAmount ?? "")}" class="h-9 w-24 rounded border border-line px-2" /></td>
           <td class="px-3 py-2"><input name="total_amount" value="${esc(item.total_amount ?? "")}" class="h-9 w-24 rounded border border-line px-2" /></td>
           <td class="px-3 py-2 text-right">
             <div class="flex justify-end gap-2">
@@ -344,6 +368,21 @@ async def dashboard() -> str:
           </td>
         </tr>
       `;
+    }
+
+    function updateReviewRowAmounts(row) {
+      const totalInput = row.querySelector('input[name="total_amount"]');
+      const vatRateInput = row.querySelector('input[name="vat_rate"]');
+      const netInput = row.querySelector('input[name="net_amount"]');
+      const vatInput = row.querySelector('input[name="vat_amount"]');
+      if (!totalInput || !vatRateInput || !netInput || !vatInput) return;
+
+      const total = numberValue(totalInput.value);
+      if (total === null) return;
+
+      const calculated = calculateAmounts(total, vatRateInput.value);
+      netInput.value = amountInputValue(calculated.net_amount);
+      vatInput.value = amountInputValue(calculated.vat_amount);
     }
 
     async function loadInitialData() {
@@ -432,6 +471,12 @@ async def dashboard() -> str:
       renderDetail();
     });
 
+    detailPanelEl.addEventListener("input", (event) => {
+      if (!["total_amount", "vat_rate"].includes(event.target.name)) return;
+      const row = event.target.closest("tr[data-item-id]");
+      if (row) updateReviewRowAmounts(row);
+    });
+
     detailPanelEl.addEventListener("click", async (event) => {
       if (event.target.id === "retrySync") {
         const receiptId = state.detail.receipt.id;
@@ -450,6 +495,7 @@ async def dashboard() -> str:
         return;
       }
       const body = {};
+      updateReviewRowAmounts(row);
       row.querySelectorAll("input, select").forEach((input) => {
         body[input.name] = input.name.endsWith("_amount") || input.name === "vat_rate"
           ? numberValue(input.value)

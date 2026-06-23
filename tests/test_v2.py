@@ -179,10 +179,13 @@ class StoreV2Tests(unittest.TestCase):
             first_id,
             {
                 "total_amount": 220.0,
-                "vat_amount": 20.0,
-                "net_amount": 200.0,
+                "vat_amount": 0.0,
+                "net_amount": 0.0,
             },
         )
+        items = dashboard_store.receipt_items(record["id"])
+        self.assertEqual(items[0]["net_amount"], 200.0)
+        self.assertEqual(items[0]["vat_amount"], 20.0)
         updated = dashboard_store.get_receipt(record["id"])
         self.assertEqual(updated["grand_total"], 340.0)
         self.assertEqual(updated["total_vat"], 40.0)
