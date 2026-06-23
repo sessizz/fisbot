@@ -223,6 +223,8 @@ class WebV2Tests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         dashboard_store.set_db_path(Path(self.tmp.name) / "fisbot.db")
         dashboard_store.init_db()
+        self.image_path = Path(self.tmp.name) / "receipt.jpg"
+        self.image_path.write_bytes(b"fake")
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -313,6 +315,83 @@ class WebV2Tests(unittest.TestCase):
                 ["GY3.32.322", "67899009", "6899008"],
             )
             self.assertEqual([item["vat_rate"] for item in fuel_items], [20, 0, 0])
+        finally:
+            web.sync_receipt_if_ready = original_sync
+
+    def test_review_delete_waits_for_next_save_before_syncing(self):
+        import fisbot.web as web
+        from fisbot.web import app
+
+        record = dashboard_store.create_receipt(
+            image_path=self.image_path,
+            telegram_user_id=1,
+            telegram_user_name="Tester",
+        )
+        receipt = parse_receipt_response(
+            """
+            {
+              "receipts": [{
+                "tarih": "01.05.2026",
+                "fis_no": "77",
+                "urunler": [
+                  {
+                    "ad": "A",
+                    "stok": "GY3.30.303",
+                    "kdv_oran": 10,
+                    "toplam": 110,
+                    "kdv": 10,
+                    "net": 100
+                  },
+                  {
+                    "ad": "B",
+                    "stok": "GY4.49.501",
+                    "kdv_oran": 20,
+                    "toplam": 120,
+                    "kdv": 20,
+                    "net": 100
+                  }
+                ],
+                "genel_toplam": 230
+              }]
+            }
+            """
+        )[0]
+        dashboard_store.save_receipt_extraction(
+            record["id"],
+            receipt,
+            raw_extraction={},
+            raw_verification={},
+            warnings=[],
+        )
+        items = dashboard_store.receipt_items(record["id"])
+        kept_id = items[0]["id"]
+        deleted_id = items[1]["id"]
+        synced_rows: list[list[dict]] = []
+
+        async def fake_sync(receipt_id: str):
+            synced_rows.append(dashboard_store.rows_for_sheets(receipt_id))
+            return dashboard_store.mark_receipt_synced(receipt_id)
+
+        original_sync = web.sync_receipt_if_ready
+        web.sync_receipt_if_ready = fake_sync
+        try:
+            client = TestClient(app)
+            delete_response = client.delete(f"/api/items/{deleted_id}")
+            self.assertEqual(delete_response.status_code, 200)
+            self.assertEqual(synced_rows, [])
+
+            save_response = client.post(
+                f"/api/items/{kept_id}",
+                json={
+                    "item_name": "A",
+                    "stock_code": "GY3.30.303",
+                    "vat_rate": 10,
+                    "total_amount": 110.0,
+                },
+            )
+            self.assertEqual(save_response.status_code, 200)
+            self.assertEqual(len(synced_rows), 1)
+            self.assertEqual([row["id"] for row in synced_rows[0]], [kept_id])
         finally:
             web.sync_receipt_if_ready = original_sync
 

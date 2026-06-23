@@ -154,7 +154,7 @@ async def dashboard() -> str:
   </main>
 
   <script>
-    const state = { rows: [], reviews: [], events: [], stockOptions: [], detail: null, query: "" };
+    const state = { rows: [], reviews: [], events: [], stockOptions: [], detail: null, query: "", detailBusy: false };
     const money = new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     const rowsEl = document.getElementById("rows");
@@ -457,18 +457,24 @@ async def dashboard() -> str:
     detailPanelEl.addEventListener("submit", async (event) => {
       if (event.target.id !== "receiptForm") return;
       event.preventDefault();
+      if (state.detailBusy) return;
+      state.detailBusy = true;
       const form = new FormData(event.target);
       const body = Object.fromEntries(form.entries());
       body.grand_total = numberValue(body.grand_total);
       body.total_vat = numberValue(body.total_vat);
       const receiptId = state.detail.receipt.id;
-      const response = await fetch(`/api/receipts/${receiptId}/fields`, {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify(body)
-      });
-      state.detail = await response.json();
-      renderDetail();
+      try {
+        const response = await fetch(`/api/receipts/${receiptId}/fields`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(body)
+        });
+        state.detail = await response.json();
+        renderDetail();
+      } finally {
+        state.detailBusy = false;
+      }
     });
 
     detailPanelEl.addEventListener("input", (event) => {
@@ -478,20 +484,31 @@ async def dashboard() -> str:
     });
 
     detailPanelEl.addEventListener("click", async (event) => {
+      if (state.detailBusy) return;
       if (event.target.id === "retrySync") {
+        state.detailBusy = true;
         const receiptId = state.detail.receipt.id;
-        const response = await fetch(`/api/receipts/${receiptId}/sync`, {method: "POST"});
-        state.detail = await response.json();
-        renderDetail();
+        try {
+          const response = await fetch(`/api/receipts/${receiptId}/sync`, {method: "POST"});
+          state.detail = await response.json();
+          renderDetail();
+        } finally {
+          state.detailBusy = false;
+        }
         return;
       }
       const button = event.target.closest("tr button");
       if (!button) return;
       const row = button.closest("tr[data-item-id]");
+      state.detailBusy = true;
       if (button.dataset.action === "delete") {
-        const response = await fetch(`/api/items/${row.dataset.itemId}`, {method: "DELETE"});
-        state.detail = await response.json();
-        renderDetail();
+        try {
+          const response = await fetch(`/api/items/${row.dataset.itemId}`, {method: "DELETE"});
+          state.detail = await response.json();
+          renderDetail();
+        } finally {
+          state.detailBusy = false;
+        }
         return;
       }
       const body = {};
@@ -501,13 +518,17 @@ async def dashboard() -> str:
           ? numberValue(input.value)
           : input.value;
       });
-      const response = await fetch(`/api/items/${row.dataset.itemId}`, {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify(body)
-      });
-      state.detail = await response.json();
-      renderDetail();
+      try {
+        const response = await fetch(`/api/items/${row.dataset.itemId}`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(body)
+        });
+        state.detail = await response.json();
+        renderDetail();
+      } finally {
+        state.detailBusy = false;
+      }
     });
 
     loadInitialData();
@@ -1093,10 +1114,9 @@ async def api_delete_item(item_id: int) -> dict[str, Any]:
         receipt = await asyncio.to_thread(delete_item, item_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    await sync_receipt_if_ready(receipt["id"])
     await emit_status(
         "Kalem silindi",
-        "Fis toplamlari yeniden hesaplandi.",
+        "Fis toplamlari yeniden hesaplandi; kaydedince Sheets'e yazilacak.",
         receipt_id=receipt["id"],
     )
     await publish_receipt_update(receipt["id"])
