@@ -1,7 +1,9 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+import requests
 from fastapi.testclient import TestClient
 
 from fisbot import dashboard_store
@@ -467,6 +469,62 @@ class WebV2Tests(unittest.TestCase):
             self.assertIn("Google Sheets baglantisi", receipt["sheet_error"])
         finally:
             web.sync_receipt_if_ready = original_sync
+
+
+class SheetsSyncTests(unittest.TestCase):
+    def test_dashboard_append_retries_transient_connection_error(self):
+        from fisbot import sheets
+
+        class FakeSheet:
+            def __init__(self, should_fail: bool):
+                self.should_fail = should_fail
+                self.appended = []
+
+            def append_rows(self, rows, value_input_option):
+                if self.should_fail:
+                    raise requests.exceptions.ConnectionError("temporary network down")
+                self.appended.append((rows, value_input_option))
+
+        class FakeClient:
+            def __init__(self, sheet):
+                self.sheet = sheet
+
+            def open_by_key(self, spreadsheet_id):
+                return self
+
+            @property
+            def sheet1(self):
+                return self.sheet
+
+        failing_sheet = FakeSheet(should_fail=True)
+        successful_sheet = FakeSheet(should_fail=False)
+        rows = [
+            {
+                "receipt_date": "03.05.2026",
+                "receipt_no": "M-2",
+                "stock_code": "GY3.30.303",
+                "net_amount": 100.0,
+                "vat_rate": 10,
+                "vat_amount": 10.0,
+                "total_amount": 110.0,
+            }
+        ]
+
+        with (
+            patch.object(
+                sheets,
+                "_get_client",
+                side_effect=[FakeClient(failing_sheet), FakeClient(successful_sheet)],
+            ) as get_client,
+            patch.object(sheets, "_sleep_before_retry") as sleep,
+        ):
+            row_count = sheets.append_dashboard_rows_to_sheet(rows)
+
+        self.assertEqual(row_count, 1)
+        self.assertEqual(get_client.call_count, 2)
+        sleep.assert_called_once()
+        self.assertEqual(len(successful_sheet.appended), 1)
+        self.assertEqual(successful_sheet.appended[0][1], "USER_ENTERED")
 
 
 if __name__ == "__main__":
