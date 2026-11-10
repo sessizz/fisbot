@@ -34,6 +34,20 @@ PORT=3000
 
 `ALLOWED_USERS` boş kalırsa bot herkese açıktır. Production'da Telegram kullanıcı ID'lerini virgülle ayırarak vermek daha güvenlidir.
 
+## Maç takvimi Excel aktarımı
+
+Bota gönderilen haftalık maç programı (`.xlsx`) maç takvimi uygulamasına iletilir ve sonuç özeti sohbete yazılır.
+Aynı bot token'ını iki uygulama polling ile paylaşamadığı için Telegram'ı sadece FişBot dinler; maç takvimi dosyayı HTTP ile alır.
+
+```env
+MACLAR_UPLOAD_URL=https://maclar.bahceliler.net/api/program
+MACLAR_UPLOAD_TOKEN=uzun-rastgele-bir-anahtar
+```
+
+- `MACLAR_UPLOAD_TOKEN`, maç takvimindeki `Program__UploadToken` ile aynı olmalı.
+- Maç takvimi sadece kendi `Telegram__ChatId` sohbetinden gelen dosyaları kabul eder; FişBot dosyanın geldiği sohbeti gönderir.
+- İki değişken de boşsa aktarım kapalıdır, bot `.xlsx` için bunu söyler.
+
 ## Google Sheets credentials
 
 En kolay yöntem `GOOGLE_SHEETS_CREDENTIALS_JSON` değişkenine service account JSON içeriğinin tamamını koymaktır.

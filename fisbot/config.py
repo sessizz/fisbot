@@ -29,6 +29,11 @@ ALLOWED_USERS: list[int] = [int(uid.strip()) for uid in _allowed.split(",") if u
 
 MAX_IMAGE_DIMENSION: int = 2048
 
+# Maç takvimi (maclar) uygulamasına haftalık Excel programı aktarımı.
+# Bota gönderilen .xlsx dosyaları bu adrese iletilir. İkisi de boşsa aktarım kapalıdır.
+MACLAR_UPLOAD_URL: str = os.getenv("MACLAR_UPLOAD_URL", "")
+MACLAR_UPLOAD_TOKEN: str = os.getenv("MACLAR_UPLOAD_TOKEN", "")
+
 # Web dashboard
 WEB_HOST: str = os.getenv("WEB_HOST", "0.0.0.0")
 WEB_PORT: int = int(os.getenv("PORT", os.getenv("WEB_PORT", "3000")))

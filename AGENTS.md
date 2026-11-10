@@ -19,7 +19,7 @@ fisbot
 python -m fisbot.main
 ```
 
-No test framework or linter is configured. The project has an empty `tests/` directory.
+Run tests with `python -m unittest discover -s tests -v`. Excel forwarding uses mocked HTTP requests.
 
 ## Required Environment Variables (`.env`)
 
@@ -46,3 +46,7 @@ No test framework or linter is configured. The project has an empty `tests/` dir
 **Multi-receipt:** A single photo can contain multiple receipts; `parser.py` handles a list of `ReceiptData` objects and `handlers.py` iterates over them.
 
 **Access control:** `handlers.py` checks `ALLOWED_USERS` on every message; if the list is non-empty and the sender is not in it, the request is rejected silently.
+
+## Maç takvimi Excel aktarımı
+
+Telegram polling yalnızca FişBot tarafından yapılır. `handlers.handle_program_excel`, `.xlsx` belgelerini `maclar.forward_program` ile maç takviminin `POST /api/program` adresine iletir. `MACLAR_UPLOAD_URL` ve `MACLAR_UPLOAD_TOKEN` ayarları gereklidir; anahtar Maclar tarafındaki `Program__UploadToken` ile aynı olmalıdır. İstekte `Authorization: Bearer ...`, `file` ve `chat_id` gönderilir. Sunucunun döndürdüğü HTML özet Telegram mesajına yazılır. Fotoğraf işleme akışı ayrıdır.

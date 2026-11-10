@@ -4,6 +4,7 @@ from telegram import Update
 from telegram.constants import ChatAction
 from telegram.ext import ContextTypes
 
+from fisbot import maclar
 from fisbot.config import ALLOWED_USERS
 from fisbot.dashboard_store import receipt_detail
 from fisbot.pipeline import process_receipt_photo
@@ -120,6 +121,34 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await status_msg.edit_text(
             "❌ Beklenmeyen bir hata oluştu. Fiş panelde de görünmüyorsa tekrar deneyin."
         )
+
+
+async def handle_program_excel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Haftalık maç programı (.xlsx) gelince maç takvimi uygulamasına iletir."""
+    user = update.effective_user
+    if user and not is_user_allowed(user.id):
+        await update.message.reply_text("Bu botu kullanma yetkiniz yok.")
+        return
+
+    if not maclar.is_configured():
+        await update.message.reply_text("Excel aktarımı ayarlı değil (MACLAR_UPLOAD_URL / MACLAR_UPLOAD_TOKEN).")
+        return
+
+    document = update.message.document
+    status_msg = await update.message.reply_text("⏳ Maç programı alındı, maç takvimine aktarılıyor...")
+
+    try:
+        file = await context.bot.get_file(document.file_id)
+        file_bytes = bytes(await file.download_as_bytearray())
+        result = await maclar.forward_program(
+            file_bytes,
+            document.file_name or "program.xlsx",
+            update.effective_chat.id,
+        )
+        await status_msg.edit_text(result.message, parse_mode="HTML")
+    except Exception:
+        logger.exception("Unexpected error forwarding match program")
+        await status_msg.edit_text("❌ Maç programı aktarılırken beklenmeyen bir hata oluştu.")
 
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

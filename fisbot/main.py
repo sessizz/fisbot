@@ -7,7 +7,14 @@ import uvicorn
 
 from fisbot.config import TELEGRAM_BOT_TOKEN, WEB_HOST, WEB_PORT
 from fisbot.dashboard_store import init_db
-from fisbot.handlers import handle_help, handle_id, handle_photo, handle_start, handle_text
+from fisbot.handlers import (
+    handle_help,
+    handle_id,
+    handle_photo,
+    handle_program_excel,
+    handle_start,
+    handle_text,
+)
 from fisbot.gemini_client import check_gemini
 
 logging.basicConfig(
@@ -42,6 +49,8 @@ def build_telegram_app():
     app.add_handler(CommandHandler("help", handle_help))
     app.add_handler(CommandHandler("id", handle_id))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    # Haftalık maç programı (.xlsx) maç takvimi uygulamasına iletilir.
+    app.add_handler(MessageHandler(filters.Document.FileExtension("xlsx"), handle_program_excel))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
     return app
